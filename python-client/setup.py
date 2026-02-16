@@ -8,6 +8,6 @@ setup(
         "requests>=2.25.0",
         "pandas>=1.0.0",
     ],
-    author="Platform Team",
+    author="Konstantinos Filippopolitis",
     description="Python client for the Portal Backend API",
 )
