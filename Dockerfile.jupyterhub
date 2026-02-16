@@ -1,0 +1,12 @@
+FROM jupyterhub/jupyterhub:4.1
+
+WORKDIR /srv/jupyterhub
+
+# Install JupyterLab and the local portal python client at build time so
+# compose startup is deterministic and fast.
+COPY ./python-client /tmp/python-client
+RUN pip install --no-cache-dir jupyterlab oauthenticator /tmp/python-client && \
+    rm -rf /tmp/python-client
+
+# Keep the onboarding notebook inside the image so spawner hook can copy it.
+COPY ./sample_notebook.ipynb /opt/portal-notebooks/Welcome.ipynb

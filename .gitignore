@@ -1,0 +1,19 @@
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Packaging artifacts
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Local env files
+.env
+.env.*
