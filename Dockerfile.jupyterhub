@@ -2,6 +2,9 @@ FROM jupyterhub/jupyterhub:4.1
 
 WORKDIR /srv/jupyterhub
 
+# Shared helpers imported by deployment-specific hub configs mounted at runtime.
+COPY ./jupyterhub_shared.py /srv/jupyterhub/jupyterhub_shared.py
+
 # Install JupyterLab and the local portal python client at build time so
 # compose startup is deterministic and fast.
 COPY ./python-client /tmp/python-client

@@ -1,7 +1,7 @@
 """Pytest configuration for the python client package.
 
-Pytest's rootdir discovery may pick the repo root (portal-backend/) instead of
-python-client/, which makes `import portal_backend_client` fail during test
+Pytest's rootdir discovery may pick the repo root (platform-backend/) instead of
+python-client/, which makes `import platform_backend_client` fail during test
 collection. Ensure the python-client directory is importable.
 """
 

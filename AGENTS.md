@@ -5,7 +5,7 @@ This repository has two deliverables: container images and a Python client.
 - `Dockerfile.jupyter` builds the single-user notebook image and seeds `Welcome.ipynb`.
 - `Dockerfile.jupyterhub` builds the hub-side image with JupyterLab and the local client package.
 - `sample_notebook.ipynb` is the onboarding notebook copied into images.
-- `python-client/portal_backend_client/` contains the library modules (`client.py`, `experiment.py`, `data_model.py`, `discovery.py`, `algorithm.py`).
+- `python-client/platform_backend_client/` contains the library modules (`client.py`, `experiment.py`, `data_model.py`, `discovery.py`, `algorithm.py`).
 - `python-client/tests/` holds unit tests; `python-client/conftest.py` keeps imports stable during test discovery.
 - `python-client/setup.py` defines package metadata and dependencies.
 Do not hand-edit generated artifacts in `build/`, `*.egg-info/`, or `__pycache__/`.
@@ -29,7 +29,7 @@ Prefer explicit error messages and deterministic behavior (no hidden network sid
 Tests are `unittest`-based and rely on `unittest.mock` to patch `requests.Session` methods.
 - Name files `test_*.py` and test methods `test_<behavior>`.
 - Keep tests isolated from real services; no live HTTP calls.
-- Add a regression test with every behavior fix in `portal_backend_client`.
+- Add a regression test with every behavior fix in `platform_backend_client`.
 
 ## Commit & Pull Request Guidelines
 Local `.git` history is not included in this checkout, so follow a consistent convention:
@@ -39,4 +39,4 @@ Local `.git` history is not included in this checkout, so follow a consistent co
 - For notebook or UX-facing changes, include screenshots or brief output snippets.
 
 ## Security & Configuration Tips
-Never commit real credentials or tokens. Use environment variables such as `PORTAL_TOKEN`, `PORTAL_BACKEND_URL`, `PORTAL_BACKEND_TIMEOUT`, and `PORTAL_BACKEND_ALLOW_REDIRECTS` for runtime configuration.
+Never commit real credentials or tokens. Use environment variables such as `PORTAL_TOKEN`, `PLATFORM_BACKEND_URL`, `PLATFORM_BACKEND_TIMEOUT`, and `PLATFORM_BACKEND_ALLOW_REDIRECTS` for runtime configuration.

@@ -150,7 +150,7 @@ class Experiment:
     def wait(self, timeout=None, poll_interval=2, raise_on_failure=True):
         """Poll backend until experiment reaches a terminal state.
 
-        Portal Backend statuses (current):
+        Platform Backend statuses (current):
         - pending: in progress
         - success: completed
         - error: failed

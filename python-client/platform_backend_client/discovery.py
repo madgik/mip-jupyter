@@ -47,7 +47,7 @@ def show_api(obj: Any, *, include_private: bool = False, max_items: int = 200) -
     """Return discoverable members of `obj`.
 
     Intended for notebooks:
-        from portal_backend_client import Experiment, show_api
+        from platform_backend_client import Experiment, show_api
         show_api(Experiment)
     """
     items: List[ApiItem] = []

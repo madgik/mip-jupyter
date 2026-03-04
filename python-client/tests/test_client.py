@@ -1,12 +1,14 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from portal_backend_client import Experiment, configure
+from platform_backend_client import Experiment, configure
+from platform_backend_client.client import PortalClient
+import requests
 
 class TestExperiment(unittest.TestCase):
     def setUp(self):
         configure(base_url="http://mock-backend", token="mock-token")
 
-    @patch('portal_backend_client.client.requests.Session.get')
+    @patch('platform_backend_client.client.requests.Session.get')
     def test_list_experiments(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -25,7 +27,7 @@ class TestExperiment(unittest.TestCase):
         self.assertEqual(exps[0].uuid, "123")
         self.assertEqual(exps[0].name, "Test Exp")
 
-    @patch('portal_backend_client.client.requests.Session.post')
+    @patch('platform_backend_client.client.requests.Session.post')
     def test_create_experiment(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 201
@@ -54,7 +56,7 @@ class TestExperiment(unittest.TestCase):
         self.assertEqual(payload['algorithm']['name'], "linear_regression")
         self.assertEqual(payload['algorithm']['inputdata']['y'], ["alzheimer_broad_category"])
 
-    @patch('portal_backend_client.client.requests.Session.post')
+    @patch('platform_backend_client.client.requests.Session.post')
     def test_run_transient_experiment(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -82,6 +84,53 @@ class TestExperiment(unittest.TestCase):
         payload = kwargs["json"]
         self.assertEqual(payload["name"], "Quick")
         self.assertEqual(payload["algorithm"]["name"], "descriptive_stats")
+
+class TestPortalClientBaseUrlResolution(unittest.TestCase):
+    @patch("platform_backend_client.client.socket.getaddrinfo")
+    def test_prefers_localhost_when_compose_host_is_unresolvable(self, mock_getaddrinfo):
+        def side_effect(host, _port):
+            if host in ("platform-backend", "platform-backend-service"):
+                raise OSError("unresolvable")
+            return [(None, None, None, None, None)]
+
+        mock_getaddrinfo.side_effect = side_effect
+        client = PortalClient(token="mock-token")
+        self.assertEqual(client.base_url, "http://localhost:8080/services")
+
+    @patch("platform_backend_client.client.requests.Session.get")
+    @patch("platform_backend_client.client.socket.getaddrinfo")
+    def test_falls_back_to_next_candidate_on_connection_error(self, mock_getaddrinfo, mock_get):
+        def resolve_side_effect(host, _port):
+            if host == "platform-backend-service":
+                raise OSError("unresolvable")
+            return [(None, None, None, None, None)]
+
+        mock_getaddrinfo.side_effect = resolve_side_effect
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.content = b'{"experiments":[]}'
+        mock_response.json.return_value = {"experiments": []}
+        mock_response.raise_for_status.return_value = None
+
+        mock_get.side_effect = [
+            requests.exceptions.ConnectionError(
+                "Failed to resolve 'platform-backend' (NameResolutionError)"
+            ),
+            mock_response,
+        ]
+
+        client = PortalClient(token="mock-token")
+        payload = client.get("/experiments", params={"size": 10, "page": 0})
+
+        self.assertEqual(payload, {"experiments": []})
+        self.assertEqual(client.base_url, "http://localhost:8080/services")
+        first_url = mock_get.call_args_list[0].args[0]
+        second_url = mock_get.call_args_list[1].args[0]
+        self.assertTrue(first_url.startswith("http://platform-backend:8080/services"))
+        self.assertTrue(second_url.startswith("http://localhost:8080/services"))
+
 
 if __name__ == '__main__':
     unittest.main()
