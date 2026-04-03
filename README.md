@@ -7,7 +7,7 @@ Jupyter and JupyterHub image assets plus a lightweight Python client for the Pla
 - `Dockerfile.jupyter`: single-user Jupyter image (installs local client and ships `Welcome.ipynb`).
 - `Dockerfile.jupyterhub`: JupyterHub image (installs JupyterLab, `oauthenticator`, and local client).
 - `sample_notebook.ipynb`: onboarding notebook copied into images.
-- `python-client/platform_backend_client/`: Python package source.
+- `python-client/mip/`: Python package source.
 - `python-client/tests/`: unit tests.
 
 Generated directories such as `python-client/build/`, `*.egg-info/`, and `__pycache__/` are build artifacts.
@@ -18,8 +18,32 @@ Generated directories such as `python-client/build/`, `*.egg-info/`, and `__pyca
 python3 -m pip install -e ./python-client
 ```
 
+Preferred notebook facade:
+
 ```python
-from platform_backend_client import (
+from mip import (
+    configure,
+    metadata,
+    algorithms,
+    experiments,
+    filters,
+    FederatedLogisticRegression,
+    FederatedLinearRegression,
+    FederatedNaiveBayes,
+)
+
+configure(base_url="http://localhost:8080/services", token="<bearer-token>")
+print(metadata.list())
+print(algorithms.list())
+print(experiments.list(limit=5))
+print(metadata.describe("dementia:0.1"))
+print(metadata.describe("dementia:0.1", include_variables=True, max_lines=120))
+```
+
+Direct class-level API is available from the same package:
+
+```python
+from mip import (
     configure,
     Experiment,
     FederatedLogisticRegression,
@@ -71,5 +95,5 @@ For reproducible builds, pin `JUPYTER_SCIPY_IMAGE` to a digest rather than a flo
 ## Development Notes
 
 - Keep API calls in tests mocked (`unittest.mock`); avoid live backend dependencies.
-- Prefer adding regression tests alongside behavior changes in `platform_backend_client`.
+- Prefer adding regression tests alongside behavior changes in `python-client/mip`.
 - Never commit real tokens or credentials.

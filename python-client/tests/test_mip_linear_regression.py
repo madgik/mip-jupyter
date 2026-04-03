@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from platform_backend_client import FederatedLinearRegression
+from mip import FederatedLinearRegression
 
 
 class _ExperimentResponse:
@@ -33,14 +33,14 @@ class TestFederatedLinearRegression(unittest.TestCase):
             "parameters": {},
         }
         patcher = patch(
-            "platform_backend_client.mip_linear_regression.FederatedLinearRegression._import_numpy_and_sklearn",
+            "mip.mip_linear_regression.FederatedLinearRegression._import_numpy_and_sklearn",
             return_value=(np, _FakeLinearRegression),
         )
         self._import_patcher = patcher
         self._import_patcher.start()
         self.addCleanup(self._import_patcher.stop)
 
-    @patch("platform_backend_client.mip_linear_regression.Experiment.run_transient")
+    @patch("mip.mip_linear_regression.Experiment.run_transient")
     def test_run_from_linear_payload_returns_model(self, mock_run_transient):
         result = {
             "dependent_var": "rightocpoccipitalpole",
@@ -61,7 +61,7 @@ class TestFederatedLinearRegression(unittest.TestCase):
         self.assertEqual(kwargs["algorithm_name"], "linear_regression")
         self.assertEqual(kwargs["name"], self.valid_payload["name"])
 
-    @patch("platform_backend_client.mip_linear_regression.Experiment.run_transient")
+    @patch("mip.mip_linear_regression.Experiment.run_transient")
     def test_prefers_sklearn_payload_when_present(self, mock_run_transient):
         result = {
             "sklearn": {
@@ -81,7 +81,7 @@ class TestFederatedLinearRegression(unittest.TestCase):
         np.testing.assert_allclose(model.intercept_, 1.1)
         self.assertEqual(model.n_features_in_, 2)
 
-    @patch("platform_backend_client.mip_linear_regression.Experiment.run_transient")
+    @patch("mip.mip_linear_regression.Experiment.run_transient")
     def test_run_from_json_string(self, mock_run_transient):
         result = {
             "indep_vars": ["Intercept", "age_value"],
@@ -104,7 +104,7 @@ class TestFederatedLinearRegression(unittest.TestCase):
         with self.assertRaises(ValueError):
             FederatedLinearRegression({"name": "x"})
 
-    @patch("platform_backend_client.mip_linear_regression.Experiment.run_transient")
+    @patch("mip.mip_linear_regression.Experiment.run_transient")
     def test_predict_and_dump(self, mock_run_transient):
         result = {
             "indep_vars": ["Intercept", "age_value", "education_level"],
@@ -124,7 +124,7 @@ class TestFederatedLinearRegression(unittest.TestCase):
             {"dump": staticmethod(lambda model, path: path)},
         )
         with patch(
-            "platform_backend_client.mip_linear_regression.FederatedLinearRegression._import_joblib",
+            "mip.mip_linear_regression.FederatedLinearRegression._import_joblib",
             return_value=fake_joblib,
         ):
             with tempfile.NamedTemporaryFile(suffix=".joblib") as tmp:
@@ -136,7 +136,7 @@ class TestFederatedLinearRegression(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             runner.predict(np.zeros((1, 2), dtype=float))
 
-    @patch("platform_backend_client.mip_linear_regression.Experiment.run_transient")
+    @patch("mip.mip_linear_regression.Experiment.run_transient")
     def test_auto_run_on_init_by_default(self, mock_run_transient):
         result = {
             "indep_vars": ["Intercept", "age_value", "education_level"],

@@ -312,7 +312,7 @@ def configure(base_url=None, token=None):
     """Configure (or reconfigure) the global client singleton.
 
     Typical notebook usage:
-        from platform_backend_client import configure
+        from mip import configure
         configure()
     """
     global _client_instance

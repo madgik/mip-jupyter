@@ -1,14 +1,14 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from platform_backend_client import Experiment, configure
-from platform_backend_client.client import PortalClient
+from mip import Experiment, configure
+from mip.client import PortalClient
 import requests
 
 class TestExperiment(unittest.TestCase):
     def setUp(self):
         configure(base_url="http://mock-backend", token="mock-token")
 
-    @patch('platform_backend_client.client.requests.Session.get')
+    @patch('mip.client.requests.Session.get')
     def test_list_experiments(self, mock_get):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -27,7 +27,7 @@ class TestExperiment(unittest.TestCase):
         self.assertEqual(exps[0].uuid, "123")
         self.assertEqual(exps[0].name, "Test Exp")
 
-    @patch('platform_backend_client.client.requests.Session.post')
+    @patch('mip.client.requests.Session.post')
     def test_create_experiment(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 201
@@ -56,7 +56,7 @@ class TestExperiment(unittest.TestCase):
         self.assertEqual(payload['algorithm']['name'], "linear_regression")
         self.assertEqual(payload['algorithm']['inputdata']['y'], ["alzheimer_broad_category"])
 
-    @patch('platform_backend_client.client.requests.Session.post')
+    @patch('mip.client.requests.Session.post')
     def test_run_transient_experiment(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -86,7 +86,7 @@ class TestExperiment(unittest.TestCase):
         self.assertEqual(payload["algorithm"]["name"], "descriptive_stats")
 
 class TestPortalClientBaseUrlResolution(unittest.TestCase):
-    @patch("platform_backend_client.client.socket.getaddrinfo")
+    @patch("mip.client.socket.getaddrinfo")
     def test_prefers_localhost_when_compose_host_is_unresolvable(self, mock_getaddrinfo):
         def side_effect(host, _port):
             if host in ("platform-backend", "platform-backend-service"):
@@ -97,8 +97,8 @@ class TestPortalClientBaseUrlResolution(unittest.TestCase):
         client = PortalClient(token="mock-token")
         self.assertEqual(client.base_url, "http://localhost:8080/services")
 
-    @patch("platform_backend_client.client.requests.Session.get")
-    @patch("platform_backend_client.client.socket.getaddrinfo")
+    @patch("mip.client.requests.Session.get")
+    @patch("mip.client.socket.getaddrinfo")
     def test_falls_back_to_next_candidate_on_connection_error(self, mock_getaddrinfo, mock_get):
         def resolve_side_effect(host, _port):
             if host == "platform-backend-service":

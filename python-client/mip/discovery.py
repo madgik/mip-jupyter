@@ -47,7 +47,7 @@ def show_api(obj: Any, *, include_private: bool = False, max_items: int = 200) -
     """Return discoverable members of `obj`.
 
     Intended for notebooks:
-        from platform_backend_client import Experiment, show_api
+        from mip import Experiment, show_api
         show_api(Experiment)
     """
     items: List[ApiItem] = []
@@ -120,4 +120,3 @@ def as_table(items: List[ApiItem]):
     except Exception:
         return items
     return pd.DataFrame([i.__dict__ for i in items], columns=["path", "kind", "signature", "doc"])
-

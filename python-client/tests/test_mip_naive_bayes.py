@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from platform_backend_client import FederatedNaiveBayes
+from mip import FederatedNaiveBayes
 
 
 class _ExperimentResponse:
@@ -61,14 +61,14 @@ class TestFederatedNaiveBayes(unittest.TestCase):
             "parameters": {},
         }
         patcher = patch(
-            "platform_backend_client.mip_naive_bayes.FederatedNaiveBayes._import_numpy_and_sklearn",
+            "mip.mip_naive_bayes.FederatedNaiveBayes._import_numpy_and_sklearn",
             return_value=(np, _FakeGaussianNB, _FakeCategoricalNB),
         )
         self._import_patcher = patcher
         self._import_patcher.start()
         self.addCleanup(self._import_patcher.stop)
 
-    @patch("platform_backend_client.mip_naive_bayes.Experiment.run_transient")
+    @patch("mip.mip_naive_bayes.Experiment.run_transient")
     def test_run_gaussian_payload_returns_model(self, mock_run_transient):
         result = {
             "classes": ["F", "M"],
@@ -90,7 +90,7 @@ class TestFederatedNaiveBayes(unittest.TestCase):
         np.testing.assert_allclose(model.class_count_, np.asarray([7.0, 5.0]))
         np.testing.assert_allclose(model.theta_, np.asarray([[0.1, 0.2], [0.5, 0.8]]))
 
-    @patch("platform_backend_client.mip_naive_bayes.Experiment.run_transient")
+    @patch("mip.mip_naive_bayes.Experiment.run_transient")
     def test_run_categorical_payload_returns_model(self, mock_run_transient):
         payload = dict(self.valid_payload)
         payload["algorithm_name"] = "naive_bayes_categorical"
@@ -127,7 +127,7 @@ class TestFederatedNaiveBayes(unittest.TestCase):
         with self.assertRaises(ValueError):
             FederatedNaiveBayes(payload, auto_run=False)
 
-    @patch("platform_backend_client.mip_naive_bayes.Experiment.run_transient")
+    @patch("mip.mip_naive_bayes.Experiment.run_transient")
     def test_run_from_json_string(self, mock_run_transient):
         result = {
             "classes": ["F", "M"],
@@ -144,7 +144,7 @@ class TestFederatedNaiveBayes(unittest.TestCase):
         model = runner.run()
         self.assertEqual(model.n_features_in_, 2)
 
-    @patch("platform_backend_client.mip_naive_bayes.Experiment.run_transient")
+    @patch("mip.mip_naive_bayes.Experiment.run_transient")
     def test_predict_proba_and_dump(self, mock_run_transient):
         result = {
             "classes": ["F", "M"],
@@ -170,7 +170,7 @@ class TestFederatedNaiveBayes(unittest.TestCase):
             {"dump": staticmethod(lambda model, path: path)},
         )
         with patch(
-            "platform_backend_client.mip_naive_bayes.FederatedNaiveBayes._import_joblib",
+            "mip.mip_naive_bayes.FederatedNaiveBayes._import_joblib",
             return_value=fake_joblib,
         ):
             with tempfile.NamedTemporaryFile(suffix=".joblib") as tmp:
@@ -182,7 +182,7 @@ class TestFederatedNaiveBayes(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             runner.predict(np.zeros((1, 2), dtype=float))
 
-    @patch("platform_backend_client.mip_naive_bayes.Experiment.run_transient")
+    @patch("mip.mip_naive_bayes.Experiment.run_transient")
     def test_auto_run_on_init_by_default(self, mock_run_transient):
         result = {
             "classes": ["F", "M"],

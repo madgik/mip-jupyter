@@ -1,17 +1,72 @@
 """High-level logistic regression helper for notebook users.
 
-This class accepts a transient experiment JSON payload, executes only the
-`logistic_regression` algorithm through Platform Backend, and returns a fitted
-sklearn-compatible LogisticRegression model.
+This module executes `logistic_regression` through Platform Backend and keeps
+the raw transient result as the primary output. Sklearn reconstruction is now
+explicit via `.get_sklearn_params()` and optional manual materialization.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+from dataclasses import dataclass
+from typing import Any
+from typing import Dict
 from typing import Optional
 
 from .experiment import Experiment
+
+_SKLEARN_LOGISTIC_SETTABLE_PARAMS = {
+    "C",
+    "class_weight",
+    "dual",
+    "fit_intercept",
+    "intercept_scaling",
+    "l1_ratio",
+    "max_iter",
+    "multi_class",
+    "n_jobs",
+    "penalty",
+    "random_state",
+    "solver",
+    "tol",
+    "verbose",
+    "warm_start",
+}
+
+_SKLEARN_LOGISTIC_FITTED_ATTRIBUTES = {
+    "classes_",
+    "coef_",
+    "feature_names_in_",
+    "intercept_",
+    "n_features_in_",
+    "n_iter_",
+}
+
+
+@dataclass
+class FederatedLogisticRegressionResult:
+    """Result container returned by federated logistic runs."""
+
+    experiment_uuid: Optional[str]
+    status: Optional[str]
+    payload: Dict[str, Any]
+    request: Dict[str, Any]
+
+    def get_sklearn_params(self) -> Dict[str, Any]:
+        """Return sklearn-compatible parameter bundles.
+
+        Returns:
+            {
+                "set_params": {...},        # safe for LogisticRegression.set_params
+                "fitted_attributes": {...}, # coef_/intercept_/classes_/...
+            }
+        """
+        return FederatedLogisticRegression._extract_sklearn_params(self.payload)
+
+    def to_sklearn_model(self):
+        """Materialize an sklearn LogisticRegression from this result."""
+        sklearn_params = self.get_sklearn_params()
+        return FederatedLogisticRegression._materialize_sklearn_model(sklearn_params)
 
 
 class FederatedLogisticRegression:
@@ -22,7 +77,8 @@ class FederatedLogisticRegression:
     - Nested shape (close to backend transient endpoint JSON body)
 
     By default, construction triggers execution immediately:
-        model = FederatedLogisticRegression(payload)
+        result = FederatedLogisticRegression(payload)
+        params = result.get_sklearn_params()
 
     Set `auto_run=False` if you want explicit control and call `run()` later.
     """
@@ -35,7 +91,8 @@ class FederatedLogisticRegression:
         auto_run: bool = True,
     ):
         self._request = self._normalize_request(transient_experiment)
-        self._model = None
+        self._result: Optional[FederatedLogisticRegressionResult] = None
+        self._model_cache = None
         self.experiment_uuid: Optional[str] = None
         self.status: Optional[str] = None
         if bool(auto_run):
@@ -56,30 +113,22 @@ class FederatedLogisticRegression:
         return dict(self._request)
 
     @property
+    def result(self) -> FederatedLogisticRegressionResult:
+        """Return the raw federated result object after run()."""
+        return self._require_result()
+
+    @property
+    def results(self) -> Dict[str, Any]:
+        """Return a copy of the raw backend result payload."""
+        return dict(self._require_result().payload)
+
+    @property
     def model(self):
-        """Return the reconstructed sklearn model after run()."""
-        return self._model
+        """Lazily materialize a local sklearn model from the raw result."""
+        return self.to_sklearn_model()
 
-    def __getattr__(self, name: str):
-        """Delegate unknown attributes/methods to the fitted sklearn model.
-
-        This enables direct access to native sklearn APIs (e.g. `coef_`,
-        `classes_`, `decision_function`) through the wrapper instance after run().
-        """
-        if name.startswith("__"):
-            raise AttributeError(name)
-
-        model = self._require_model()
-        try:
-            return getattr(model, name)
-        except AttributeError as exc:
-            raise AttributeError(
-                f"'FederatedLogisticRegression' has no attribute '{name}' "
-                f"and underlying model '{type(model).__name__}' does not expose it."
-            ) from exc
-
-    def run(self):
-        """Execute transient logistic regression and return sklearn model."""
+    def run(self) -> FederatedLogisticRegressionResult:
+        """Execute transient logistic regression and keep raw backend results."""
         response = Experiment.run_transient(
             name=self._request["name"],
             algorithm_name=self.ALGORITHM_NAME,
@@ -94,27 +143,49 @@ class FederatedLogisticRegression:
         )
         self.experiment_uuid = response.uuid
         self.status = response.status
-        self._model = self._build_model_from_result(response.results)
-        return self._model
 
-    def fit(self):
+        if not isinstance(response.results, dict):
+            raise TypeError(
+                "Transient experiment result is not a JSON object; cannot extract sklearn params."
+            )
+
+        self._result = FederatedLogisticRegressionResult(
+            experiment_uuid=response.uuid,
+            status=response.status,
+            payload=dict(response.results),
+            request=dict(self._request),
+        )
+        self._model_cache = None
+        return self._result
+
+    def fit(self) -> FederatedLogisticRegressionResult:
         """Alias for run() to mirror sklearn naming."""
         return self.run()
 
+    def get_sklearn_params(self) -> Dict[str, Any]:
+        """Return sklearn parameter bundles from the raw federated result."""
+        return self._require_result().get_sklearn_params()
+
+    def to_sklearn_model(self, refresh: bool = False):
+        """Materialize a local sklearn LogisticRegression model on demand."""
+        if self._model_cache is None or bool(refresh):
+            self._model_cache = self._require_result().to_sklearn_model()
+        return self._model_cache
+
     def predict(self, x):
-        """Predict classes using the reconstructed sklearn model."""
-        model = self._require_model()
+        """Predict classes using an on-demand materialized sklearn model."""
+        model = self.to_sklearn_model()
         return model.predict(self._coerce_input_with_feature_names(model, x))
 
     def predict_proba(self, x):
-        """Predict probabilities using the reconstructed sklearn model."""
-        model = self._require_model()
+        """Predict probabilities using an on-demand materialized sklearn model."""
+        model = self.to_sklearn_model()
         return model.predict_proba(self._coerce_input_with_feature_names(model, x))
 
     def dump(self, path: str):
-        """Persist model to disk via joblib."""
+        """Persist the materialized sklearn model to disk via joblib."""
         joblib = self._import_joblib()
-        joblib.dump(self._require_model(), path)
+        joblib.dump(self.to_sklearn_model(), path)
         return path
 
     @classmethod
@@ -215,12 +286,11 @@ class FederatedLogisticRegression:
             )
 
     @classmethod
-    def _build_model_from_result(cls, result_payload: Any):
-        np, logistic_regression_cls = cls._import_numpy_and_sklearn()
-
+    def _extract_sklearn_params(cls, result_payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract sklearn-compatible params from backend result payload."""
         if not isinstance(result_payload, dict):
             raise TypeError(
-                "Transient experiment result is not a JSON object; cannot build sklearn model."
+                "Transient experiment result is not a JSON object; cannot extract sklearn params."
             )
 
         sklearn_payload = (
@@ -228,54 +298,122 @@ class FederatedLogisticRegression:
             or result_payload.get("sklearn_model")
             or result_payload.get("sklearn_compatible")
         )
-        if isinstance(sklearn_payload, dict) and "coef_" in sklearn_payload:
-            return cls._build_model_from_sklearn_payload(
-                payload=sklearn_payload,
-                np=np,
-                logistic_regression_cls=logistic_regression_cls,
+
+        if isinstance(sklearn_payload, dict):
+            return cls._extract_from_sklearn_payload(sklearn_payload)
+
+        return cls._extract_from_summary_payload(result_payload)
+
+    @classmethod
+    def _extract_from_sklearn_payload(cls, payload: Dict[str, Any]) -> Dict[str, Any]:
+        fitted_attributes: Dict[str, Any] = {}
+        for key in _SKLEARN_LOGISTIC_FITTED_ATTRIBUTES:
+            if key in payload:
+                fitted_attributes[key] = payload[key]
+
+        if "coef_" not in fitted_attributes or "intercept_" not in fitted_attributes:
+            raise ValueError(
+                "Sklearn payload must include 'coef_' and 'intercept_' to reconstruct model parameters."
             )
 
+        coef_rows, coef_cols = cls._infer_coef_shape(fitted_attributes["coef_"])
+        if coef_cols <= 0:
+            raise ValueError("Sklearn payload 'coef_' must contain at least one feature coefficient.")
+
+        if "classes_" not in fitted_attributes:
+            fitted_attributes["classes_"] = [0, 1] if coef_rows <= 1 else list(range(coef_rows))
+        if "n_features_in_" not in fitted_attributes:
+            fitted_attributes["n_features_in_"] = int(coef_cols)
+        if "n_iter_" not in fitted_attributes:
+            fitted_attributes["n_iter_"] = [1]
+
+        set_params = {}
+        nested_set_params = payload.get("set_params")
+        if isinstance(nested_set_params, dict):
+            set_params.update(nested_set_params)
+        for key in _SKLEARN_LOGISTIC_SETTABLE_PARAMS:
+            if key in payload:
+                set_params[key] = payload[key]
+
+        return {
+            "set_params": set_params,
+            "fitted_attributes": fitted_attributes,
+        }
+
+    @classmethod
+    def _extract_from_summary_payload(cls, result_payload: Dict[str, Any]) -> Dict[str, Any]:
         summary = result_payload.get("summary") or {}
         coefficients = summary.get("coefficients") or []
         indep_vars = result_payload.get("indep_vars") or []
         if len(coefficients) < 2:
             raise ValueError(
-                "Could not reconstruct logistic model from result: "
+                "Could not extract sklearn parameters from result: "
                 "expected summary.coefficients with intercept + feature coefficients."
             )
 
-        model = logistic_regression_cls()
-        model.classes_ = np.asarray([0, 1])
-        model.intercept_ = np.asarray([coefficients[0]], dtype=float)
-        model.coef_ = np.asarray(coefficients[1:], dtype=float).reshape(1, -1)
-        model.n_features_in_ = int(model.coef_.shape[1])
-        model.n_iter_ = np.asarray([1], dtype=np.int32)
+        fitted_attributes: Dict[str, Any] = {
+            "classes_": [0, 1],
+            "intercept_": [coefficients[0]],
+            "coef_": [coefficients[1:]],
+            "n_features_in_": len(coefficients) - 1,
+            "n_iter_": [1],
+        }
+        if indep_vars and len(indep_vars) == len(coefficients):
+            fitted_attributes["feature_names_in_"] = list(indep_vars[1:])
 
-        if indep_vars and len(indep_vars) == model.n_features_in_ + 1:
-            model.feature_names_in_ = np.asarray(indep_vars[1:], dtype=object)
+        return {
+            "set_params": {},
+            "fitted_attributes": fitted_attributes,
+        }
 
-        return model
+    @staticmethod
+    def _infer_coef_shape(coef: Any) -> tuple[int, int]:
+        shape = getattr(coef, "shape", None)
+        if isinstance(shape, tuple) and len(shape) == 2:
+            return int(shape[0]), int(shape[1])
+
+        if isinstance(coef, (list, tuple)):
+            if not coef:
+                return 0, 0
+            first = coef[0]
+            if isinstance(first, (list, tuple)):
+                return len(coef), len(first)
+            return 1, len(coef)
+
+        return 0, 0
 
     @classmethod
-    def _build_model_from_sklearn_payload(
-        cls,
-        payload: Dict[str, Any],
-        np,
-        logistic_regression_cls,
-    ):
+    def _materialize_sklearn_model(cls, sklearn_params: Dict[str, Any]):
+        np, logistic_regression_cls = cls._import_numpy_and_sklearn()
+
+        set_params = sklearn_params.get("set_params") or {}
+        fitted_attributes = sklearn_params.get("fitted_attributes") or {}
+
         model = logistic_regression_cls()
-        coef = np.asarray(payload["coef_"], dtype=float)
+        if set_params:
+            model = model.set_params(**set_params)
+
+        required = {"coef_", "intercept_", "classes_"}
+        missing = sorted(required - set(fitted_attributes.keys()))
+        if missing:
+            raise ValueError(
+                f"Cannot materialize sklearn model; missing fitted attributes: {', '.join(missing)}."
+            )
+
+        coef = np.asarray(fitted_attributes["coef_"], dtype=float)
+        if coef.ndim == 1:
+            coef = coef.reshape(1, -1)
         if coef.ndim != 2:
-            raise ValueError(f"Expected sklearn payload coef_ as 2D array, got shape {coef.shape}")
+            raise ValueError(f"Expected fitted coef_ as 2D array-like, got shape {coef.shape}.")
 
         model.coef_ = coef
-        model.intercept_ = np.asarray(payload["intercept_"], dtype=float).reshape(-1)
-        model.classes_ = np.asarray(payload.get("classes_", [0, 1]))
-        model.n_features_in_ = int(payload.get("n_features_in_", coef.shape[1]))
-        model.n_iter_ = np.asarray(payload.get("n_iter_", [1]), dtype=np.int32)
+        model.intercept_ = np.asarray(fitted_attributes["intercept_"], dtype=float).reshape(-1)
+        model.classes_ = np.asarray(fitted_attributes["classes_"])
+        model.n_features_in_ = int(fitted_attributes.get("n_features_in_", coef.shape[1]))
+        model.n_iter_ = np.asarray(fitted_attributes.get("n_iter_", [1]), dtype=np.int32)
 
-        if "feature_names_in_" in payload:
-            model.feature_names_in_ = np.asarray(payload["feature_names_in_"], dtype=object)
+        if "feature_names_in_" in fitted_attributes:
+            model.feature_names_in_ = np.asarray(fitted_attributes["feature_names_in_"], dtype=object)
 
         return model
 
@@ -298,10 +436,10 @@ class FederatedLogisticRegression:
             raise RuntimeError("FederatedLogisticRegression.dump requires joblib to be installed.") from exc
         return joblib
 
-    def _require_model(self):
-        if self._model is None:
-            raise RuntimeError("Model is not available yet. Call run() first.")
-        return self._model
+    def _require_result(self) -> FederatedLogisticRegressionResult:
+        if self._result is None:
+            raise RuntimeError("Result is not available yet. Call run() first.")
+        return self._result
 
     @staticmethod
     def _coerce_input_with_feature_names(model, x):
