@@ -1,49 +1,45 @@
-# MIP Jupyter Expected Library (Init)
+# MIP Jupyter Expected Library
 
-This document initializes the expected contract for the notebook-side library built in
-`mip-jupyter` and consumed inside Jupyter/JupyterHub.
+Contract for the notebook-side `mip` library built in `mip-jupyter` and consumed inside Jupyter/JupyterHub.
 
-## System Context (Authoritative)
+## System Context
 
 - Experiment execution engine: `exaflow/`
-- API gateway to the engine: `platform-backend/` (`/services/...` endpoints)
+- API gateway: `platform-backend/` (`/services/...`)
 - Web application: `platform-ui/`
-- Notebook/client library home: `mip-jupyter/`
-- Containerized integration test environment: `mip/deployment/dev/`
+- Notebook client: `mip-jupyter/`
 
-Design rule: notebook code must call `platform-backend`; it must not call Exaflow internals
-directly. Exaflow remains an internal execution engine behind backend APIs.
+Design rule: notebook code calls `platform-backend` only, not Exaflow directly.
 
 ## Library Goals
 
-- Provide a clean, notebook-friendly API for metadata discovery and experiment execution.
-- Keep backend transport details hidden behind a small client surface.
-- Support authenticated and non-authenticated dev deployments (including JupyterHub mode).
-- Return Python-native objects and sklearn-compatible models where relevant.
+- Discover data models and datasets before analysis (`catalog`)
+- Express analysis state in an immutable `Context`
+- Run federated statistics and models through `Analysis` namespaces
+- Hide HTTP transport behind `configure()` and internal `PortalClient`
+- Return notebook-friendly `ResultTable` objects with `.to_dataframe()`
 
 ## Runtime Wiring
 
-- Default backend base URL should resolve in both compose and local runs:
-  - `http://platform-backend:8080/services`
-  - fallbacks: `platform-backend-service`, `localhost`, `172.17.0.1`
-- Token resolution order:
-  - explicit `configure(token=...)`
-  - `PLATFORM_TOKEN`, `PORTAL_TOKEN`
-  - local token file (`mip_token` or `.mip_token`)
-- In JupyterHub mode, token refresh may happen through the hub helper endpoint.
+- Default backend URL: `http://platform-backend:8080/services` (with local fallbacks)
+- Token order: `configure(token=...)`, then `PLATFORM_TOKEN` / `PORTAL_TOKEN`, then token file
+- JupyterHub: token refresh via hub `/api/portal-token`
 
-## Expected Public API (Notebook-Facing)
+## Public API
 
 ```python
 from mip import (
     configure,
-    metadata,
-    algorithms,
-    experiments,
-    filters,
-    FederatedLogisticRegression,
-    FederatedLinearRegression,
-    FederatedNaiveBayes,
+    catalog,
+    Context,
+    Analysis,
+    Rule,
+    FilterGroup,
+    Case,
+    Validation,
+    MISSING,
+    Report,
+    ReportSection,
 )
 ```
 
@@ -53,126 +49,120 @@ from mip import (
 configure(
     base_url="http://localhost:8080/services",
     token="<bearer-token>",
-    timeout=30,
-    allow_redirects=False,
 )
 ```
 
-### 2) Metadata Discovery
+`configure()` must be called before `catalog` or `Analysis` use.
+
+### 2) Catalog discovery (pre-Context)
 
 ```python
-models = metadata.list()                   # available data models/pathologies
-p = metadata.get_pathology("dementia:0.1") # alias to selected data model
-vars_ = p.variables
-datasets = p.datasets
-
-# tree view of metadata hierarchy (groups/subgroups/variables)
-metadata.describe("dementia:0.1")
-# include variable leaves
-metadata.describe("dementia:0.1", include_variables=True)
+catalog.models().to_dataframe()
+catalog.datasets("stroke:1.0").to_dataframe()
+catalog.get("stroke:1.0")
+catalog.visualize("stroke:1.0", include_variables=True)
+catalog.visualize_all()
 ```
 
-### 3) Algorithm Discovery
+### 3) Context and Analysis
 
 ```python
-algos = algorithms.list()
-```
-
-### 4) Experiment Lifecycle
-
-```python
-from mip import experiments
-
-exp = experiments.create(
-    name="lr-demo",
-    algorithm_name="logistic_regression",
-    data_model="dementia:0.1",
-    datasets=["edsd"],
-    x=["lefthippocampus", "righthippocampus"],
-    y=["alzheimerbroadcategory"],
-    filters=None,
-    parameters={"positive_class": "AD"},
+context = Context(
+    data_model="stroke:1.0",
+    datasets=["ssrdataset_harmonized"],
+    mip_version="dev",
 )
 
-exp.wait(timeout=120)
-result = exp.results
+analysis = Analysis(context)
 ```
 
-### 5) Transient (Synchronous) Runs
+### 4) Transformations and cohorts
 
 ```python
-exp = experiments.run_transient(
-    name="quick-run",
-    algorithm_name="linear_regression",
-    data_model="dementia:0.1",
-    datasets=["edsd"],
-    x=["age", "lefthippocampus"],
-    y=["rightamygdala"],
+cohort = analysis.transformations.categorical_from_filters(
+    name="stroke_territory_cohort",
+    label="Stroke territory cohort",
+    cases=[
+        Case(label="ACS", when=FilterGroup.and_(Rule("stroke_territory", "in", ["anterior_left"]))),
+    ],
+    otherwise=MISSING,
+    validation=Validation(mutually_exclusive=True, allow_unmatched=True),
+)
+
+analysis = analysis.with_transformations([cohort])
+cohort_check = analysis.cohorts.validate(
+    group_by="stroke_territory_cohort",
+    expected_levels=["ACS", "PCS"],
+    checks=["counts", "missing"],
 )
 ```
 
-### 6) sklearn-Compatible Wrappers
+### 5) Descriptive statistics
 
 ```python
-result = FederatedLogisticRegression({
-    "name": "lr-model",
-    "data_model": "dementia:0.1",
-    "datasets": ["edsd"],
-    "x": ["lefthippocampus", "righthippocampus"],
-    "y": ["alzheimerbroadcategory"],
-    "parameters": {"positive_class": "AD"},
-})
-
-sk = result.get_sklearn_params()
-
-from sklearn.linear_model import LogisticRegression
-import numpy as np
-
-model = LogisticRegression().set_params(**sk["set_params"])
-fitted = sk["fitted_attributes"]
-model.classes_ = np.asarray(fitted["classes_"])
-model.coef_ = np.asarray(fitted["coef_"], dtype=float)
-model.intercept_ = np.asarray(fitted["intercept_"], dtype=float)
-model.n_features_in_ = int(fitted["n_features_in_"])
-model.n_iter_ = np.asarray(fitted.get("n_iter_", [1]), dtype=np.int32)
-
-pred = model.predict(df)
-proba = model.predict_proba(df)
+analysis.describe.numeric(variables=["age"], group_by="stroke_territory_cohort", levels=["ACS", "PCS"])
+analysis.describe.categorical(variables=["sex"], group_by="stroke_territory_cohort", levels=["ACS", "PCS"])
 ```
 
-## Filters Contract
-
-The library must expose a stable filter DSL for backend-compatible rulesets:
+### 6) Statistical tests
 
 ```python
-from mip.filters import AND, OR, EQUAL, GREATER, RULESET
-
-rule = ("age", GREATER, 60)
-ruleset = RULESET([rule], AND)
+analysis.tests.ttest_independent(
+    variables=["age"],
+    group_by="stroke_territory_cohort",
+    group_a="ACS",
+    group_b="PCS",
+)
+analysis.tests.chi_squared(factor="stroke_territory_cohort", outcomes=["sex"])
 ```
 
-Filters are serialized into the backend `algorithm.inputdata.filters` payload shape.
+`analysis.tests.mann_whitney_u(...)` raises `NotImplementedError` until the backend algorithm exists.
 
-## Error Handling Expectations
+### 7) Models
 
-- If backend redirects instead of returning JSON, raise a clear auth/base-url error.
-- If token is expired, raise actionable guidance (or refresh via JupyterHub when available).
-- For failed experiments, raise with `uuid`, status, and backend error details.
+```python
+logit = analysis.models.logistic_regression(
+    outcome="good_outcome_3m",
+    positive_class="good",
+    predictors=["age", "sex"],
+    reference_levels={"sex": "female"},
+    missing="drop",
+)
+logit.summary().to_dataframe()
+logit.metrics().to_dataframe()
+```
 
-## Integration and Validation
+### 8) Filters
 
-Primary integration environment is `mip/deployment/dev/`.
+```python
+FilterGroup.and_(Rule("age", ">", 60), Rule("sex", "==", "female"))
+```
 
-Minimum validation for every library change:
+Operators: `==`, `!=`, `in`, `not_in`, `>`, `>=`, `<`, `<=`, `is_null`, `not_null`.
 
-1. Unit tests in `mip-jupyter/python-client/tests`.
-2. Smoke run against `mip/deployment/dev` stack (backend + notebook mode when relevant).
-3. Verify round-trip behavior for at least one algorithm call routed through:
-   Jupyter library -> platform-backend -> Exaflow -> platform-backend response.
+### 9) Reports
+
+```python
+report = Report(title="Analysis", sections=[ReportSection(title="Cohort", result=cohort_check)])
+report.display()
+```
+
+## Error Handling
+
+- `MipConfigurationError`: `configure()` not called
+- `MipBackendError`: transient experiment failure
+- `MipValidationError`: invalid transformation/cohort input
+- `LookupError`: ambiguous or missing data model in `catalog`
+
+## Validation
+
+1. `cd python-client && poetry run python -m unittest discover -s tests -p "test_*.py"`
+2. `python3 python-client/verify_script.py`
+3. Smoke against `mip/deployment/dev` when backend is available
 
 ## Scope Boundary
 
-- `mip-jupyter` owns notebook images + Python client library behavior.
-- `platform-backend` owns API contracts and orchestration toward Exaflow.
-- `exaflow` owns algorithm execution and federated engine internals.
-- `platform-ui` is a separate consumer of backend APIs and not a dependency of notebook library code.
+- `mip-jupyter`: notebook images + Python client
+- `platform-backend`: API gateway and experiment orchestration
+- `exaflow`: internal execution engine
+- No dataset upload or CSV loading APIs in the notebook client

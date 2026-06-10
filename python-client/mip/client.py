@@ -305,7 +305,11 @@ def get_client():
     """Get the singleton configured client instance."""
     global _client_instance
     if _client_instance is None:
-        _client_instance = PortalClient()
+        from .errors import MipConfigurationError
+
+        raise MipConfigurationError(
+            "No platform-backend client is configured for this notebook environment."
+        )
     return _client_instance
 
 def configure(base_url=None, token=None):

@@ -1,35 +1,49 @@
-"""MIP Python client package."""
+"""MIP Python client package for notebook-based analysis."""
 
 from __future__ import annotations
 
-from .algorithm import Algorithm
-from .client import configure, get_client
-from .data_model import DataModel
-from .discovery import as_table, search_api, show_api
-from .experiment import Experiment
-from .mip_linear_regression import FederatedLinearRegression
-from .mip_logistic_regression import FederatedLogisticRegression
-from .mip_naive_bayes import FederatedNaiveBayes
-
-from . import algorithms
-from . import experiments
-from . import filters
-from . import metadata
+from . import catalog
+from .analysis import Analysis
+from .client import configure
+from ._metadata_tree import MetadataTree
+from .context import Context
+from .errors import MipAlgorithmNotAvailable
+from .errors import MipBackendError
+from .errors import MipConfigurationError
+from .errors import MipError
+from .errors import MipTransformationError
+from .errors import MipValidationError
+from .filters import MISSING
+from .filters import Case
+from .filters import FilterGroup
+from .filters import Rule
+from .filters import Validation
+from .report import Report
+from .report import ReportSection
+from .results import ChiSquaredResult
+from .results import ModelResult
+from .results import ResultTable
 
 __all__ = [
+    "Analysis",
+    "MetadataTree",
+    "catalog",
+    "Case",
+    "ChiSquaredResult",
+    "Context",
+    "FilterGroup",
+    "MISSING",
+    "MipAlgorithmNotAvailable",
+    "MipBackendError",
+    "MipConfigurationError",
+    "MipError",
+    "MipTransformationError",
+    "MipValidationError",
+    "ModelResult",
+    "Report",
+    "ReportSection",
+    "ResultTable",
+    "Rule",
+    "Validation",
     "configure",
-    "get_client",
-    "Experiment",
-    "Algorithm",
-    "DataModel",
-    "show_api",
-    "search_api",
-    "as_table",
-    "metadata",
-    "algorithms",
-    "experiments",
-    "filters",
-    "FederatedLogisticRegression",
-    "FederatedLinearRegression",
-    "FederatedNaiveBayes",
 ]

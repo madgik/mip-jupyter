@@ -1,50 +1,69 @@
-import sys
 import os
+import sys
+
 sys.path.append(os.getcwd())
 
 print("Importing mip...", flush=True)
 try:
-    from mip import Experiment, configure
+    from mip import Analysis, Context, catalog, configure
     print("Import successful.", flush=True)
-except Exception as e:
-    print(f"Import failed: {e}", flush=True)
+except Exception as exc:
+    print(f"Import failed: {exc}", flush=True)
     sys.exit(1)
 
 print("Configuring client...", flush=True)
 configure(base_url="http://mock-backend", token="mock-token")
 print("Client configured.", flush=True)
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
-print("Testing list experiments...", flush=True)
-with patch('mip.client.requests.Session.get') as mock_get:
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"experiments": [{"uuid": "123", "name": "Test Exp", "status": "DONE"}]}
-    mock_get.return_value = mock_response
+MOCK_DATA_MODELS = [
+    {
+        "code": "stroke",
+        "version": "1.0",
+        "label": "Stroke",
+        "longitudinal": False,
+        "variables": [],
+        "groups": [],
+        "datasets": [{"code": "ds1", "label": "Dataset 1"}],
+        "datasetsVariables": {},
+    }
+]
 
-    exps = Experiment.list()
-    print(f"Found {len(exps)} experiments.", flush=True)
-    if len(exps) == 1 and exps[0].uuid == "123":
-        print("List experiments test PASSED", flush=True)
-    else:
-        print("List experiments test FAILED", flush=True)
+print("Testing catalog path...", flush=True)
+with patch("mip.data_model.get_client") as mock_get_client:
+    client = MagicMock()
+    client.get.return_value = MOCK_DATA_MODELS
+    mock_get_client.return_value = client
 
-print("Testing create experiment...", flush=True)
-with patch('mip.client.requests.Session.post') as mock_post:
-    mock_response = MagicMock()
-    mock_response.json.return_value = {"uuid": "456", "name": "New Exp", "status": "PENDING"}
-    mock_post.return_value = mock_response
+    models = catalog.models(client=client).to_dataframe()
+    if len(models) != 1 or models.loc[0, "name"] != "stroke:1.0":
+        print("Catalog smoke test FAILED", flush=True)
+        sys.exit(1)
+print("Catalog smoke test PASSED", flush=True)
 
-    exp = Experiment.create(
-        name="New Exp",
-        algorithm_name="linear_regression",
-        data_model="dementia:0.1",
-        datasets=["edsd"],
-        y=["alzheimer_broad_category"]
+print("Testing Analysis describe path...", flush=True)
+with patch("mip._requests.run_transient") as mock_run:
+    mock_run.return_value = (
+        {
+            "featurewise": [
+                {
+                    "variable": "age",
+                    "dataset": "all datasets",
+                    "data": {"num_dtps": 10, "num_na": 0, "num_total": 10, "mean": 65.0},
+                }
+            ]
+        },
+        "job-1",
+        "success",
     )
-    
-    print(f"Created experiment {exp.uuid}", flush=True)
-    if exp.uuid == "456":
-        print("Create experiment test PASSED", flush=True)
+    context = Context(data_model="stroke:1.0", datasets=["ds1"])
+    analysis = Analysis(context)
+    result = analysis.describe.numeric(variables=["age"])
+    frame = result.to_dataframe()
+    if len(frame) == 1 and frame.loc[0, "variable"] == "age":
+        print("Analysis smoke test PASSED", flush=True)
     else:
-        print("Create experiment test FAILED", flush=True)
+        print("Analysis smoke test FAILED", flush=True)
+        sys.exit(1)

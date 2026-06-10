@@ -1,101 +1,178 @@
-"""Filter DSL helpers that serialize to Platform Backend/Exaflow format."""
+"""Filter DSL that serializes to platform-backend / Exaflow-compatible JSON."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 from typing import Iterable
 from typing import Mapping
+from typing import Sequence
 
-# Group conditions
 AND = "AND"
 OR = "OR"
 
-# Operators (backend/exaflow expects these lower-case values)
-EQUAL = "equal"
-NOT_EQUAL = "not_equal"
-LESS = "less"
-GREATER = "greater"
-LESS_OR_EQUAL = "less_or_equal"
-GREATER_OR_EQUAL = "greater_or_equal"
-BETWEEN = "between"
-NOT_BETWEEN = "not_between"
-IS_NULL = "is_null"
-IS_NOT_NULL = "is_not_null"
-IN = "in"
-NOT_IN = "not_in"
+_OPERATOR_MAP = {
+    "==": "equal",
+    "!=": "not_equal",
+    "in": "in",
+    "not_in": "not_in",
+    ">": "greater",
+    ">=": "greater_or_equal",
+    "<": "less",
+    "<=": "less_or_equal",
+    "is_null": "is_null",
+    "not_null": "is_not_null",
+    "equal": "equal",
+    "not_equal": "not_equal",
+    "greater": "greater",
+    "greater_or_equal": "greater_or_equal",
+    "less": "less",
+    "less_or_equal": "less_or_equal",
+    "is_not_null": "is_not_null",
+    "between": "between",
+    "not_between": "not_between",
+}
+
+MISSING = object()
 
 
-def RULE(field: str, operator: str, value: Any, value_type: str | None = None) -> dict:
-    """Build a single backend-compatible filter rule."""
-    if not isinstance(field, str) or not field.strip():
-        raise ValueError("field must be a non-empty string.")
-    if not isinstance(operator, str) or not operator.strip():
-        raise ValueError("operator must be a non-empty string.")
+@dataclass(frozen=True)
+class Rule:
+    """A single filter rule on one field."""
 
-    return {
-        "id": field.strip(),
-        "field": field.strip(),
-        "operator": operator.strip(),
-        "value": value,
-        "type": value_type or _infer_value_type(value),
-    }
+    field: str
+    operator: str
+    value: Any = None
 
-
-def RULESET(rules: Iterable[Any], condition: str = AND) -> dict:
-    """Build a backend-compatible ruleset payload.
-
-    Rules may be provided as:
-    - rule dicts (already serialized)
-    - tuples: (field, operator, value)
-    - tuples: (field, operator, value, value_type)
-    """
-    condition_value = str(condition or "").strip().upper()
-    if condition_value not in (AND, OR):
-        raise ValueError("condition must be AND or OR.")
-
-    serialized_rules = [_normalize_rule(rule) for rule in (rules or [])]
-    if not serialized_rules:
-        raise ValueError("rules must contain at least one rule.")
-
-    return {
-        "condition": condition_value,
-        "rules": serialized_rules,
-    }
+    def to_dict(self) -> dict:
+        field = self.field.strip()
+        operator = _normalize_operator(self.operator)
+        return {
+            "id": field,
+            "field": field,
+            "operator": operator,
+            "value": self.value,
+            "type": _infer_value_type(self.value),
+        }
 
 
-def _normalize_rule(rule: Any) -> dict:
+@dataclass(frozen=True)
+class FilterGroup:
+    """A group of rules combined with AND or OR."""
+
+    condition: str
+    rules: tuple[Any, ...]
+
+    @classmethod
+    def and_(cls, *rules: Any) -> FilterGroup:
+        return cls(condition=AND, rules=tuple(rules))
+
+    @classmethod
+    def or_(cls, *rules: Any) -> FilterGroup:
+        return cls(condition=OR, rules=tuple(rules))
+
+    def to_dict(self) -> dict:
+        condition = str(self.condition or "").strip().upper()
+        if condition not in (AND, OR):
+            raise ValueError("condition must be AND or OR.")
+        serialized = [_serialize_rule(rule) for rule in self.rules]
+        if not serialized:
+            raise ValueError("rules must contain at least one rule.")
+        return {"condition": condition, "rules": serialized}
+
+
+@dataclass(frozen=True)
+class Validation:
+    """Validation options for categorical-from-filters transformations."""
+
+    mutually_exclusive: bool = True
+    allow_unmatched: bool = True
+
+    def to_dict(self) -> dict:
+        return {
+            "mutually_exclusive": self.mutually_exclusive,
+            "allow_unmatched": self.allow_unmatched,
+        }
+
+
+@dataclass(frozen=True)
+class Case:
+    """A labeled cohort case defined by a filter group."""
+
+    label: str
+    when: FilterGroup | Rule
+
+    def to_dict(self) -> dict:
+        when_dict = self.when.to_dict() if isinstance(self.when, FilterGroup) else self.when.to_dict()
+        return {"label": self.label, "when": when_dict}
+
+
+def merge_filter_groups(base: FilterGroup | None, extra: FilterGroup | Rule | None) -> FilterGroup | None:
+    """Combine two filter groups with AND semantics."""
+    if base is None and extra is None:
+        return None
+    if base is None:
+        if isinstance(extra, Rule):
+            return FilterGroup.and_(extra)
+        return extra
+    if extra is None:
+        return base
+    extra_rules: Sequence[Any]
+    if isinstance(extra, Rule):
+        extra_rules = (extra,)
+    else:
+        extra_rules = extra.rules
+    return FilterGroup.and_(*base.rules, *extra_rules)
+
+
+def _normalize_operator(operator: str) -> str:
+    key = str(operator or "").strip()
+    if key not in _OPERATOR_MAP:
+        raise ValueError(f"Unsupported operator: {operator!r}")
+    return _OPERATOR_MAP[key]
+
+
+def _serialize_rule(rule: Any) -> dict:
+    if isinstance(rule, Rule):
+        return rule.to_dict()
+    if isinstance(rule, FilterGroup):
+        return rule.to_dict()
     if isinstance(rule, Mapping):
         rule_dict = dict(rule)
-        is_leaf_rule = "id" in rule_dict or "field" in rule_dict
+        if "condition" in rule_dict:
+            return FilterGroup(
+                condition=rule_dict["condition"],
+                rules=tuple(rule_dict.get("rules") or []),
+            ).to_dict()
         if "id" not in rule_dict and "field" in rule_dict:
             rule_dict["id"] = rule_dict["field"]
         if "field" not in rule_dict and "id" in rule_dict:
             rule_dict["field"] = rule_dict["id"]
-        if is_leaf_rule and "type" not in rule_dict:
+        if "type" not in rule_dict:
             rule_dict["type"] = _infer_value_type(rule_dict.get("value"))
+        if "operator" in rule_dict:
+            rule_dict["operator"] = _normalize_operator(rule_dict["operator"])
         return rule_dict
-
     if isinstance(rule, tuple):
         if len(rule) == 3:
             field, operator, value = rule
-            return RULE(field=field, operator=operator, value=value)
+            return Rule(field=field, operator=operator, value=value).to_dict()
         if len(rule) == 4:
             field, operator, value, value_type = rule
-            return RULE(field=field, operator=operator, value=value, value_type=value_type)
-
-    raise ValueError(
-        "Each rule must be a dict, (field, operator, value), or "
-        "(field, operator, value, value_type)."
-    )
+            payload = Rule(field=field, operator=operator, value=value).to_dict()
+            payload["type"] = value_type
+            return payload
+    raise ValueError("Each rule must be a Rule, FilterGroup, dict, or tuple.")
 
 
 def _infer_value_type(value: Any) -> str:
+    if value is MISSING:
+        return "string"
     if isinstance(value, list):
         for item in value:
             if item is not None:
                 return _infer_value_type(item)
         return "string"
-
     if isinstance(value, bool):
         return "boolean"
     if isinstance(value, int):

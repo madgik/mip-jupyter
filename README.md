@@ -1,83 +1,61 @@
 # mip-jupyter
 
-Jupyter and JupyterHub image assets plus a lightweight Python client for the Platform Backend API.
+Jupyter and JupyterHub image assets plus the `mip` Python client for federated analysis via platform-backend.
 
 ## Repository Layout
 
-- `Dockerfile.jupyter`: single-user Jupyter image (installs local client and ships `Welcome.ipynb`).
-- `Dockerfile.jupyterhub`: JupyterHub image (installs JupyterLab, `oauthenticator`, and local client).
-- `sample_notebook.ipynb`: onboarding notebook copied into images.
-- `python-client/mip/`: Python package source.
-- `python-client/tests/`: unit tests.
+- `Dockerfile.jupyter` — single-user Jupyter image (installs client, ships `Welcome.ipynb`)
+- `Dockerfile.jupyterhub` — JupyterHub image (JupyterLab, OAuth, client)
+- `sample_notebook.ipynb` — onboarding notebook copied into images
+- `python-client/mip/` — `mip` package source
+- `python-client/tests/` — unit tests
+- `expected_library.md` — public API contract
 
-Generated directories such as `python-client/build/`, `*.egg-info/`, and `__pycache__/` are build artifacts.
+## Install
 
-## Python Client Quick Start
+```bash
+cd python-client && poetry install
+```
+
+Or:
 
 ```bash
 python3 -m pip install -e ./python-client
 ```
 
-Preferred notebook facade:
+## Quick Start
 
 ```python
-from mip import (
-    configure,
-    metadata,
-    algorithms,
-    experiments,
-    filters,
-    FederatedLogisticRegression,
-    FederatedLinearRegression,
-    FederatedNaiveBayes,
-)
+from mip import configure, catalog, Context, Analysis
 
 configure(base_url="http://localhost:8080/services", token="<bearer-token>")
-print(metadata.list())
-print(algorithms.list())
-print(experiments.list(limit=5))
-print(metadata.describe("dementia:0.1"))
-print(metadata.describe("dementia:0.1", include_variables=True, max_lines=120))
+
+# Discover data models and datasets
+catalog.models().to_dataframe()
+catalog.datasets("stroke:1.0").to_dataframe()
+catalog.visualize("stroke:1.0", include_variables=True)
+
+# Run analysis
+context = Context(data_model="stroke:1.0", datasets=["ssrdataset_harmonized"])
+analysis = Analysis(context)
+
+summary = analysis.describe.numeric(variables=["age"])
+summary.to_dataframe()
 ```
 
-Direct class-level API is available from the same package:
+See [`expected_library.md`](expected_library.md) for the full API (transformations, tests, models, reports).
 
-```python
-from mip import (
-    configure,
-    Experiment,
-    FederatedLogisticRegression,
-    FederatedLinearRegression,
-    FederatedNaiveBayes,
-)
+## Environment Variables
 
-configure(base_url="http://localhost:8080/services", token="<bearer-token>")
-experiments = Experiment.list(limit=10)
-print(experiments)
-```
+- `PLATFORM_BACKEND_URL` — default `http://platform-backend:8080/services`
+- `PLATFORM_TOKEN` / `PORTAL_TOKEN` — bearer token
+- `PLATFORM_BACKEND_TIMEOUT` — default `30`
+- `PLATFORM_BACKEND_ALLOW_REDIRECTS` — default `0`
 
-Client defaults can be driven by environment variables:
-- `PLATFORM_BACKEND_URL` (default: `http://platform-backend:8080/services`)
-- `PLATFORM_TOKEN` (preferred)
-- `PORTAL_TOKEN`
-- `PLATFORM_BACKEND_TIMEOUT` (default: `30`)
-- `PLATFORM_BACKEND_ALLOW_REDIRECTS` (default: `0`)
-
-## Run Tests
+## Tests
 
 ```bash
 cd python-client && python3 -m unittest discover -s tests -p "test_*.py"
-```
-
-Optional (pytest-compatible discovery is configured):
-
-```bash
-python3 -m pytest python-client/tests -q
-```
-
-Smoke verification script:
-
-```bash
 python3 python-client/verify_script.py
 ```
 
@@ -90,10 +68,10 @@ docker build \
 docker build -f Dockerfile.jupyterhub -t mip-jupyterhub:dev .
 ```
 
-For reproducible builds, pin `JUPYTER_SCIPY_IMAGE` to a digest rather than a floating tag.
+Pin `JUPYTER_SCIPY_IMAGE` to a digest for reproducible builds.
 
 ## Development Notes
 
-- Keep API calls in tests mocked (`unittest.mock`); avoid live backend dependencies.
-- Prefer adding regression tests alongside behavior changes in `python-client/mip`.
-- Never commit real tokens or credentials.
+- Mock HTTP in tests; no live backend in unit tests
+- Never commit real tokens
+- Generated artifacts (`build/`, `*.egg-info/`, `__pycache__/`, `.venv/`) are gitignored

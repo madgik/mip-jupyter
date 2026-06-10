@@ -1,23 +1,42 @@
-"""Metadata/pathology helpers for notebook users."""
+"""ASCII metadata tree rendering for catalog visualization."""
 
 from __future__ import annotations
 
 import builtins
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Mapping, Optional
+from typing import Any
+from typing import Iterable
+from typing import Mapping
+from typing import Optional
 
 from .data_model import DataModel
 
 
 class MetadataTree(str):
-    """String wrapper with notebook-friendly repr for tree descriptions."""
+    """String wrapper with notebook-friendly repr and display."""
 
-    def __repr__(self) -> str:  # pragma: no cover - tiny display helper
+    def __repr__(self) -> str:
         return str(self)
+
+    def display(self) -> None:
+        try:
+            from IPython.display import HTML
+            from IPython.display import display
+        except ImportError:
+            print(self)
+            return
+
+        escaped = (
+            str(self)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+        display(HTML(f"<pre>{escaped}</pre>"))
 
 
 @dataclass(frozen=True)
-class Pathology:
+class PathologyView:
     """Notebook-friendly view of a backend data model."""
 
     code: Optional[str]
@@ -38,8 +57,8 @@ class Pathology:
         return code or version
 
 
-def _to_pathology(model: DataModel) -> Pathology:
-    return Pathology(
+def pathology_from_model(model: DataModel) -> PathologyView:
+    return PathologyView(
         code=model.code,
         version=model.version,
         label=model.label,
@@ -51,137 +70,14 @@ def _to_pathology(model: DataModel) -> Pathology:
     )
 
 
-def _iter_models() -> Iterable[DataModel]:
-    return DataModel.list()
-
-
-def list() -> List[Pathology]:  # noqa: A001 - public API follows notebook convention
-    """List all available pathologies/data models."""
-    return [_to_pathology(model) for model in _iter_models()]
-
-
-def get_pathology(code_or_code_version: str) -> Pathology:
-    """Get pathology metadata by code or `code:version`.
-
-    Args:
-        code_or_code_version: Either `dementia` or `dementia:0.1`.
-
-    Raises:
-        LookupError: when no matching pathology is found, or the code maps to
-            multiple versions and no explicit version is provided.
-    """
-    if not isinstance(code_or_code_version, str) or not code_or_code_version.strip():
-        raise ValueError("code_or_code_version must be a non-empty string.")
-
-    selector = code_or_code_version.strip()
-    models = builtins.list(_iter_models())
-    if ":" in selector:
-        code, version = selector.split(":", 1)
-        for model in models:
-            if model.code == code and str(model.version) == version:
-                return _to_pathology(model)
-        raise LookupError(f"No pathology found for '{selector}'.")
-
-    matched = [m for m in models if m.code == selector]
-    if not matched:
-        raise LookupError(f"No pathology found for '{selector}'.")
-    if len(matched) > 1:
-        available = ", ".join(sorted(f"{m.code}:{m.version}" for m in matched))
-        raise LookupError(
-            "Multiple pathology versions found. Use '<code>:<version>'. "
-            f"Available for '{selector}': {available}"
-        )
-    return _to_pathology(matched[0])
-
-
-def describe(
-    pathology: Optional[str | Pathology | DataModel] = None,
-    *,
-    include_variables: bool = False,
-    max_lines: int = 250,
-):
-    """Describe metadata as an ASCII tree.
-
-    Examples:
-        metadata.describe()  # all available data models (summary tree)
-        metadata.describe("dementia:0.1")  # single model hierarchy
-        metadata.describe("dementia:0.1", include_variables=True)
-    """
-    models = builtins.list(_iter_models())
-
-    if pathology is None:
-        return MetadataTree(_describe_catalog(models=models, max_lines=max_lines))
-
-    resolved = _resolve_pathology(pathology=pathology, models=models)
-    return MetadataTree(
-        _describe_pathology(
-            pathology=resolved,
-            include_variables=include_variables,
-            max_lines=max_lines,
-        )
-    )
-
-
-def _resolve_pathology(pathology: str | Pathology | DataModel, models: list[DataModel]) -> Pathology:
-    if isinstance(pathology, Pathology):
-        return pathology
-    if isinstance(pathology, DataModel):
-        return _to_pathology(pathology)
-    if isinstance(pathology, str):
-        selector = pathology.strip()
-        if not selector:
-            raise ValueError("pathology must be a non-empty string.")
-        if ":" in selector:
-            code, version = selector.split(":", 1)
-            for model in models:
-                if model.code == code and str(model.version) == version:
-                    return _to_pathology(model)
-            raise LookupError(f"No pathology found for '{selector}'.")
-
-        matched = [m for m in models if m.code == selector]
-        if not matched:
-            raise LookupError(f"No pathology found for '{selector}'.")
-        if len(matched) > 1:
-            available = ", ".join(sorted(f"{m.code}:{m.version}" for m in matched))
-            raise LookupError(
-                "Multiple pathology versions found. Use '<code>:<version>'. "
-                f"Available for '{selector}': {available}"
-            )
-        return _to_pathology(matched[0])
-
-    raise TypeError("pathology must be a code string, Pathology, or DataModel.")
-
-
-class _LineWriter:
-    def __init__(self, max_lines: int):
-        self.max_lines = max(1, int(max_lines))
-        self.lines: list[str] = []
-        self.truncated = False
-
-    def add(self, line: str) -> bool:
-        if len(self.lines) >= self.max_lines:
-            self.truncated = True
-            return False
-        self.lines.append(line)
-        return True
-
-    def render(self) -> str:
-        if self.truncated:
-            if self.lines:
-                self.lines[-1] = "... (truncated)"
-            else:
-                self.lines.append("... (truncated)")
-        return "\n".join(self.lines)
-
-
-def _describe_catalog(models: list[DataModel], max_lines: int) -> str:
+def render_catalog_tree(models: list[DataModel], *, max_lines: int = 250) -> str:
     writer = _LineWriter(max_lines=max_lines)
     writer.add(f"Data models ({len(models)})")
     if not models:
         return writer.render()
 
     ordered = sorted(
-        [_to_pathology(model) for model in models],
+        [pathology_from_model(model) for model in models],
         key=lambda model: ((model.code or "").lower(), str(model.version or "").lower()),
     )
     for index, model in enumerate(ordered):
@@ -194,11 +90,19 @@ def _describe_catalog(models: list[DataModel], max_lines: int) -> str:
             f"{groups_count} groups",
             f"{grouped_variables_count} grouped vars",
         ]
-        writer.add(f"{connector} {_format_name_label(model.code, model.label)}:{model.version} [{', '.join(summary)}]")
+        writer.add(
+            f"{connector} {_format_name_label(model.code, model.label)}:{model.version} "
+            f"[{', '.join(summary)}]"
+        )
     return writer.render()
 
 
-def _describe_pathology(pathology: Pathology, include_variables: bool, max_lines: int) -> str:
+def render_pathology_tree(
+    pathology: PathologyView,
+    *,
+    include_variables: bool = False,
+    max_lines: int = 250,
+) -> str:
     writer = _LineWriter(max_lines=max_lines)
     title = f"Metadata tree for {pathology.name or '<unknown>'}"
     if pathology.label and pathology.label != pathology.name:
@@ -254,6 +158,28 @@ def _describe_pathology(pathology: Pathology, include_variables: bool, max_lines
             continue
 
     return writer.render()
+
+
+class _LineWriter:
+    def __init__(self, max_lines: int):
+        self.max_lines = max(1, int(max_lines))
+        self.lines: list[str] = []
+        self.truncated = False
+
+    def add(self, line: str) -> bool:
+        if len(self.lines) >= self.max_lines:
+            self.truncated = True
+            return False
+        self.lines.append(line)
+        return True
+
+    def render(self) -> str:
+        if self.truncated:
+            if self.lines:
+                self.lines[-1] = "... (truncated)"
+            else:
+                self.lines.append("... (truncated)")
+        return "\n".join(self.lines)
 
 
 def _render_group(
@@ -339,8 +265,13 @@ def _format_dataset(dataset: Any) -> str:
     if isinstance(dataset, str):
         return dataset
     label = str(_item_get(dataset, "label") or "").strip()
+    code = str(_item_get(dataset, "code") or "").strip()
+    if label and code and label != code:
+        return f"{label} ({code})"
     if label:
         return label
+    if code:
+        return code
     return "<unknown>"
 
 

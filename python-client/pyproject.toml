@@ -1,0 +1,35 @@
+[project]
+name = "mip"
+version = "0.1.0"
+description = "Notebook-facing Python client for the MIP platform analysis API"
+authors = [{ name = "Konstantinos Filippopolitis" }]
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "requests>=2.25.0,<3.0.0",
+    "pandas>=1.0.0,<4.0.0",
+    "numpy>=1.21.0,<3.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0,<9.0.0"]
+notebook = ["ipython>=8.0.0,<10.0.0"]
+
+[tool.poetry]
+packages = [{ include = "mip" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0.0,<9.0.0"
+
+[tool.poetry.group.notebook]
+optional = true
+
+[tool.poetry.group.notebook.dependencies]
+ipython = ">=8.0.0,<10.0.0"
+
+[build-system]
+requires = ["poetry-core>=1.9.0,<2.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
