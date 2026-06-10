@@ -74,11 +74,11 @@ def build_singleuser_csp_arg(frame_ancestors):
     )
 
 
-def install_portal_token_handler(c, *, authentication_enabled):
+def install_platform_token_handler(c, *, authentication_enabled):
     from jupyterhub.apihandlers.base import APIHandler
     from tornado import web
 
-    class PortalTokenHandler(APIHandler):
+    class PlatformTokenHandler(APIHandler):
         @web.authenticated
         async def get(self):
             if not authentication_enabled:
@@ -101,4 +101,4 @@ def install_portal_token_handler(c, *, authentication_enabled):
 
             self.finish({"access_token": token})
 
-    c.JupyterHub.extra_handlers = [(r"/api/portal-token", PortalTokenHandler)]
+    c.JupyterHub.extra_handlers = [(r"/api/platform-token", PlatformTokenHandler)]

@@ -4,9 +4,10 @@ Jupyter and JupyterHub image assets plus the `mip` Python client for federated a
 
 ## Repository Layout
 
-- `Dockerfile.jupyter` — single-user Jupyter image (installs client, ships `Welcome.ipynb`)
+- `Dockerfile.jupyter` — single-user Jupyter image (installs client, ships `feres_analysis.ipynb`)
 - `Dockerfile.jupyterhub` — JupyterHub image (JupyterLab, OAuth, client)
-- `sample_notebook.ipynb` — onboarding notebook copied into images
+- `feres_analysis.ipynb` — Feres stroke territory analysis (ACS vs PCS) copied into images; see [Mailli et al. (2026)](https://www.frontiersin.org/journals/disaster-and-emergency-medicine/articles/10.3389/femer.2026.1748193/full)
+- `expected_library_page.ipynb` — runnable API contract from `expected_library.md`
 - `python-client/mip/` — `mip` package source
 - `python-client/tests/` — unit tests
 - `expected_library.md` — public API contract
@@ -48,7 +49,7 @@ See [`expected_library.md`](expected_library.md) for the full API (transformatio
 ## Environment Variables
 
 - `PLATFORM_BACKEND_URL` — default `http://platform-backend:8080/services`
-- `PLATFORM_TOKEN` / `PORTAL_TOKEN` — bearer token
+- `PLATFORM_TOKEN` — bearer token for platform-backend
 - `PLATFORM_BACKEND_TIMEOUT` — default `30`
 - `PLATFORM_BACKEND_ALLOW_REDIRECTS` — default `0`
 

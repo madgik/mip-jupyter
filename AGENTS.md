@@ -2,9 +2,10 @@
 
 ## Project Structure & Module Organization
 This repository has two deliverables: container images and a Python client.
-- `Dockerfile.jupyter` builds the single-user notebook image and seeds `Welcome.ipynb`.
+- `Dockerfile.jupyter` builds the single-user notebook image and seeds `feres_analysis.ipynb`.
 - `Dockerfile.jupyterhub` builds the hub-side image with JupyterLab and the local client package.
-- `sample_notebook.ipynb` is the onboarding notebook copied into images.
+- `feres_analysis.ipynb` is the Feres stroke territory analysis notebook copied into images.
+- `expected_library_page.ipynb` exercises the public API contract from `expected_library.md`.
 - `python-client/mip/` contains the library modules (`context.py`, `analysis.py`, `catalog.py`, `client.py`, `data_model.py`, `filters.py`, `transformations.py`, `describe.py`, `tests.py`, `models.py`, `results.py`, `report.py`).
 - `python-client/tests/` holds unit tests; `python-client/conftest.py` keeps imports stable during test discovery.
 - `python-client/pyproject.toml` defines Poetry package metadata and dependencies.
@@ -41,4 +42,4 @@ Local `.git` history is not included in this checkout, so follow a consistent co
 - For notebook or UX-facing changes, include screenshots or brief output snippets.
 
 ## Security & Configuration Tips
-Never commit real credentials or tokens. Use environment variables such as `PORTAL_TOKEN`, `PLATFORM_BACKEND_URL`, `PLATFORM_BACKEND_TIMEOUT`, and `PLATFORM_BACKEND_ALLOW_REDIRECTS` for runtime configuration.
+Never commit real credentials or tokens. Use environment variables such as `PLATFORM_TOKEN`, `PLATFORM_BACKEND_URL`, `PLATFORM_BACKEND_TIMEOUT`, and `PLATFORM_BACKEND_ALLOW_REDIRECTS` for runtime configuration.

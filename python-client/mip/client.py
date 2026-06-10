@@ -15,27 +15,25 @@ DEFAULT_BASE_URLS = [
 ]
 
 
-class PortalClient:
+class PlatformBackendClient:
     def __init__(self, base_url=None, token=None, timeout=None, allow_redirects=None):
-        """Create a low-level HTTP client for Platform Backend APIs.
+        """Create a low-level HTTP client for platform-backend APIs.
 
         Args:
-            base_url: Backend base URL, defaults to env PLATFORM_BACKEND_URL
-                (or legacy PORTAL_BACKEND_URL). If neither is set, the client
-                auto-discovers from known local endpoints.
-            token: Bearer token. If missing, reads PLATFORM_TOKEN, PORTAL_TOKEN,
-                or token file.
+            base_url: Backend base URL, defaults to env PLATFORM_BACKEND_URL.
+                If unset, the client auto-discovers from known local endpoints.
+            token: Bearer token. If missing, reads PLATFORM_TOKEN or token file.
             timeout: Default request timeout in seconds. If not provided, reads
                 env PLATFORM_BACKEND_TIMEOUT (default 30).
             allow_redirects: Whether to follow HTTP redirects. Defaults to False
                 because redirects from API endpoints usually mean "login required"
                 and can otherwise hang in environments without external network.
         """
-        configured_url = base_url or os.getenv("PLATFORM_BACKEND_URL") or os.getenv("PORTAL_BACKEND_URL")
+        configured_url = base_url or os.getenv("PLATFORM_BACKEND_URL")
         self._auto_base_url = configured_url is None
         self._base_url_candidates = self._build_base_url_candidates(configured_url)
         self.base_url = self._base_url_candidates[0]
-        self.token = token or os.getenv("PLATFORM_TOKEN") or os.getenv("PORTAL_TOKEN") or self._read_token_from_file()
+        self.token = token or os.getenv("PLATFORM_TOKEN") or self._read_token_from_file()
         self.timeout = float(timeout if timeout is not None else os.getenv("PLATFORM_BACKEND_TIMEOUT", "30"))
         if allow_redirects is None:
             allow_redirects = os.getenv("PLATFORM_BACKEND_ALLOW_REDIRECTS", "0") in ("1", "true", "True")
@@ -84,7 +82,7 @@ class PortalClient:
             return False
 
         # This endpoint is provided by our JupyterHub config (see mip-deployment/*/jupyterhub*).
-        url = f"{api_url}/portal-token"
+        url = f"{api_url}/platform-token"
         try:
             r = requests.get(
                 url,
@@ -320,4 +318,4 @@ def configure(base_url=None, token=None):
         configure()
     """
     global _client_instance
-    _client_instance = PortalClient(base_url, token)
+    _client_instance = PlatformBackendClient(base_url, token)

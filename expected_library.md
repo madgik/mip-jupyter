@@ -16,14 +16,14 @@ Design rule: notebook code calls `platform-backend` only, not Exaflow directly.
 - Discover data models and datasets before analysis (`catalog`)
 - Express analysis state in an immutable `Context`
 - Run federated statistics and models through `Analysis` namespaces
-- Hide HTTP transport behind `configure()` and internal `PortalClient`
+- Hide HTTP transport behind `configure()` and internal `PlatformBackendClient`
 - Return notebook-friendly `ResultTable` objects with `.to_dataframe()`
 
 ## Runtime Wiring
 
 - Default backend URL: `http://platform-backend:8080/services` (with local fallbacks)
-- Token order: `configure(token=...)`, then `PLATFORM_TOKEN` / `PORTAL_TOKEN`, then token file
-- JupyterHub: token refresh via hub `/api/portal-token`
+- Token order: `configure(token=...)`, then `PLATFORM_TOKEN`, then token file
+- JupyterHub: token refresh via hub `/api/platform-token`
 
 ## Public API
 

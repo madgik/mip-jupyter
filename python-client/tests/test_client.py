@@ -5,12 +5,12 @@ from unittest.mock import patch
 import requests
 
 from mip import configure
-from mip.client import PortalClient
+from mip.client import PlatformBackendClient
 from mip.errors import MipConfigurationError
 from mip.client import get_client
 
 
-class TestPortalClientConfiguration(unittest.TestCase):
+class TestPlatformBackendClientConfiguration(unittest.TestCase):
     def test_get_client_requires_configure(self):
         import mip.client as client_module
 
@@ -25,7 +25,7 @@ class TestPortalClientConfiguration(unittest.TestCase):
         self.assertEqual(client.token, "mock-token")
 
 
-class TestPortalClientBaseUrlResolution(unittest.TestCase):
+class TestPlatformBackendClientBaseUrlResolution(unittest.TestCase):
     @patch("mip.client.socket.getaddrinfo")
     def test_prefers_localhost_when_compose_host_is_unresolvable(self, mock_getaddrinfo):
         def side_effect(host, _port):
@@ -34,7 +34,7 @@ class TestPortalClientBaseUrlResolution(unittest.TestCase):
             return [(None, None, None, None, None)]
 
         mock_getaddrinfo.side_effect = side_effect
-        client = PortalClient(token="mock-token")
+        client = PlatformBackendClient(token="mock-token")
         self.assertEqual(client.base_url, "http://localhost:8080/services")
 
     @patch("mip.client.requests.Session.get")
@@ -61,7 +61,7 @@ class TestPortalClientBaseUrlResolution(unittest.TestCase):
             mock_response,
         ]
 
-        client = PortalClient(token="mock-token")
+        client = PlatformBackendClient(token="mock-token")
         payload = client.get("/experiments", params={"size": 10, "page": 0})
 
         self.assertEqual(payload, {"experiments": []})
