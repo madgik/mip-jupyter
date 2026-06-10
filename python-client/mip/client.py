@@ -3,32 +3,74 @@ import os
 import json
 import time
 import base64
+import socket
+from urllib.parse import urlparse
+
+
+DEFAULT_BASE_URLS = [
+    "http://platform-backend:8080/services",
+    "http://platform-backend-service:8080/services",
+    "http://localhost:8080/services",
+    "http://172.17.0.1:8080/services",
+]
 
 
 class PortalClient:
     def __init__(self, base_url=None, token=None, timeout=None, allow_redirects=None):
-        """Create a low-level HTTP client for Portal Backend APIs.
+        """Create a low-level HTTP client for Platform Backend APIs.
 
         Args:
-            base_url: Backend base URL, defaults to env PORTAL_BACKEND_URL or
-                "http://portalbackend:8080/services".
-            token: Bearer token. If missing, reads PORTAL_TOKEN or token file.
+            base_url: Backend base URL, defaults to env PLATFORM_BACKEND_URL
+                (or legacy PORTAL_BACKEND_URL). If neither is set, the client
+                auto-discovers from known local endpoints.
+            token: Bearer token. If missing, reads PLATFORM_TOKEN, PORTAL_TOKEN,
+                or token file.
             timeout: Default request timeout in seconds. If not provided, reads
-                env PORTAL_BACKEND_TIMEOUT (default 30).
+                env PLATFORM_BACKEND_TIMEOUT (default 30).
             allow_redirects: Whether to follow HTTP redirects. Defaults to False
                 because redirects from API endpoints usually mean "login required"
                 and can otherwise hang in environments without external network.
         """
-        self.base_url = base_url or os.getenv('PORTAL_BACKEND_URL', 'http://portalbackend:8080/services')
-        self.token = token or os.getenv('PORTAL_TOKEN') or self._read_token_from_file()
-        self.timeout = float(timeout if timeout is not None else os.getenv("PORTAL_BACKEND_TIMEOUT", "30"))
+        configured_url = base_url or os.getenv("PLATFORM_BACKEND_URL") or os.getenv("PORTAL_BACKEND_URL")
+        self._auto_base_url = configured_url is None
+        self._base_url_candidates = self._build_base_url_candidates(configured_url)
+        self.base_url = self._base_url_candidates[0]
+        self.token = token or os.getenv("PLATFORM_TOKEN") or os.getenv("PORTAL_TOKEN") or self._read_token_from_file()
+        self.timeout = float(timeout if timeout is not None else os.getenv("PLATFORM_BACKEND_TIMEOUT", "30"))
         if allow_redirects is None:
-            allow_redirects = os.getenv("PORTAL_BACKEND_ALLOW_REDIRECTS", "0") in ("1", "true", "True")
+            allow_redirects = os.getenv("PLATFORM_BACKEND_ALLOW_REDIRECTS", "0") in ("1", "true", "True")
         self.allow_redirects = bool(allow_redirects)
         self.session = requests.Session()
         
         if self.token:
             self.session.headers.update({'Authorization': f'Bearer {self.token}'})
+
+    def _build_base_url_candidates(self, configured_url):
+        """Return ordered unique base URL candidates."""
+        if configured_url:
+            return [configured_url.rstrip("/")]
+
+        resolvable = []
+        unresolved = []
+        for url in DEFAULT_BASE_URLS:
+            if self._url_host_resolves(url):
+                resolvable.append(url)
+            else:
+                unresolved.append(url)
+        ordered = resolvable + unresolved
+        # Keep insertion order while removing duplicates.
+        return list(dict.fromkeys(ordered))
+
+    def _url_host_resolves(self, url):
+        """Best-effort DNS check used only for ordering fallback candidates."""
+        host = (urlparse(url).hostname or "").strip()
+        if not host:
+            return False
+        try:
+            socket.getaddrinfo(host, None)
+            return True
+        except OSError:
+            return False
 
     def _maybe_refresh_token_via_jupyterhub(self):
         """Refresh access token via JupyterHub (if running inside a JupyterHub single-user server).
@@ -87,21 +129,7 @@ class PortalClient:
     def get(self, endpoint, params=None):
         """Execute a GET request and return parsed JSON."""
         self._raise_if_expired_token()
-        url = f"{self.base_url}{endpoint}"
-        response = self.session.get(
-            url,
-            params=params,
-            timeout=self.timeout,
-            allow_redirects=self.allow_redirects,
-        )
-        # If the hub-injected access token expired, attempt a one-time refresh via hub and retry.
-        if response.status_code == 401 and self._maybe_refresh_token_via_jupyterhub():
-            response = self.session.get(
-                url,
-                params=params,
-                timeout=self.timeout,
-                allow_redirects=self.allow_redirects,
-            )
+        response, url = self._request_with_base_url_failover("get", endpoint, params=params)
         self._raise_if_redirected(response, url)
         response.raise_for_status()
         return self._json_or_empty(response)
@@ -109,23 +137,67 @@ class PortalClient:
     def post(self, endpoint, data=None):
         """Execute a POST request with JSON body and return parsed JSON."""
         self._raise_if_expired_token()
-        url = f"{self.base_url}{endpoint}"
-        response = self.session.post(
-            url,
-            json=data,
-            timeout=self.timeout,
-            allow_redirects=self.allow_redirects,
-        )
-        if response.status_code == 401 and self._maybe_refresh_token_via_jupyterhub():
-            response = self.session.post(
-                url,
-                json=data,
-                timeout=self.timeout,
-                allow_redirects=self.allow_redirects,
-            )
+        response, url = self._request_with_base_url_failover("post", endpoint, json=data)
         self._raise_if_redirected(response, url)
         response.raise_for_status()
         return self._json_or_empty(response)
+
+    def _request_with_base_url_failover(self, method, endpoint, **kwargs):
+        """Execute request and fall back across known base URLs when DNS/connection fails.
+
+        Failover is enabled only when no explicit base_url/env URL was provided.
+        """
+        candidates = self._base_url_candidates if self._auto_base_url else [self.base_url]
+        last_exc = None
+
+        for index, candidate in enumerate(candidates):
+            url = f"{candidate}{endpoint}"
+            try:
+                request_fn = getattr(self.session, method)
+                response = request_fn(
+                    url,
+                    timeout=self.timeout,
+                    allow_redirects=self.allow_redirects,
+                    **kwargs,
+                )
+                # If the hub-injected access token expired, attempt a one-time refresh via hub and retry.
+                if response.status_code == 401 and self._maybe_refresh_token_via_jupyterhub():
+                    response = request_fn(
+                        url,
+                        timeout=self.timeout,
+                        allow_redirects=self.allow_redirects,
+                        **kwargs,
+                    )
+                # Persist working endpoint for subsequent calls.
+                self.base_url = candidate
+                if self._auto_base_url and index > 0:
+                    remaining = [x for x in self._base_url_candidates if x != candidate]
+                    self._base_url_candidates = [candidate] + remaining
+                return response, url
+            except requests.exceptions.ConnectionError as exc:
+                last_exc = exc
+                if not self._should_try_next_candidate(exc, index, len(candidates)):
+                    raise
+
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("Request failed without response.")
+
+    def _should_try_next_candidate(self, exc, index, total_candidates):
+        if not self._auto_base_url:
+            return False
+        if index >= total_candidates - 1:
+            return False
+        message = str(exc).lower()
+        transient_connection_markers = (
+            "name resolution",
+            "failed to resolve",
+            "nameresolutionerror",
+            "newconnectionerror",
+            "connection refused",
+            "max retries exceeded",
+        )
+        return any(marker in message for marker in transient_connection_markers)
 
     def _raise_if_redirected(self, response, url):
         """Fail fast on HTTP redirects from API endpoints (usually auth/login)."""
@@ -138,13 +210,13 @@ class PortalClient:
         except Exception:
             location = None
         raise RuntimeError(
-            "Portal Backend request was redirected (likely authentication required).\n"
+            "Platform Backend request was redirected (likely authentication required).\n"
             f"- request: {url}\n"
             f"- status: {status}\n"
             f"- location: {location}\n\n"
             "Fix:\n"
             "- If you run this OUTSIDE docker-compose: use configure(base_url='http://localhost:8080/services').\n"
-            "- If authentication is enabled: pass a bearer token via configure(token=...), or set PORTAL_TOKEN.\n"
+            "- If authentication is enabled: pass a bearer token via configure(token=...), or set PLATFORM_TOKEN.\n"
         )
 
     def _json_or_empty(self, response):
@@ -181,7 +253,7 @@ class PortalClient:
                     "sending a login page (authentication required) or you hit the wrong base_url.\n\n"
                     "Fix:\n"
                     "- If you run this OUTSIDE docker-compose: use configure(base_url='http://localhost:8080/services').\n"
-                    "- If authentication is enabled: pass a bearer token via configure(token=...), or set PORTAL_TOKEN.\n"
+                    "- If authentication is enabled: pass a bearer token via configure(token=...), or set PLATFORM_TOKEN.\n"
                 ) from exc
             raise RuntimeError(
                 f"Backend returned non-JSON response (Content-Type: {content_type or 'unknown'})."
@@ -203,7 +275,7 @@ class PortalClient:
                 "The API token is expired and could not be refreshed automatically.\n\n"
                 "Fix:\n"
                 "- If you are in JupyterHub: re-login or restart your notebook server session.\n"
-                "- Otherwise: provide a fresh token via configure(token=...) or set PORTAL_TOKEN.\n"
+                "- Otherwise: provide a fresh token via configure(token=...) or set PLATFORM_TOKEN.\n"
             )
 
     def _decode_jwt_payload(self, token):
@@ -221,12 +293,7 @@ class PortalClient:
 
     def delete(self, endpoint):
         """Execute a DELETE request and return the raw response object."""
-        url = f"{self.base_url}{endpoint}"
-        response = self.session.delete(
-            url,
-            timeout=self.timeout,
-            allow_redirects=self.allow_redirects,
-        )
+        response, url = self._request_with_base_url_failover("delete", endpoint)
         self._raise_if_redirected(response, url)
         response.raise_for_status()
         return response
@@ -238,14 +305,18 @@ def get_client():
     """Get the singleton configured client instance."""
     global _client_instance
     if _client_instance is None:
-        _client_instance = PortalClient()
+        from .errors import MipConfigurationError
+
+        raise MipConfigurationError(
+            "No platform-backend client is configured for this notebook environment."
+        )
     return _client_instance
 
 def configure(base_url=None, token=None):
     """Configure (or reconfigure) the global client singleton.
 
     Typical notebook usage:
-        from portal_backend_client import configure
+        from mip import configure
         configure()
     """
     global _client_instance

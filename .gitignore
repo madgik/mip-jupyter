@@ -4,16 +4,50 @@ __pycache__/
 *.pyo
 *.pyd
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
 
 # Packaging artifacts
 build/
 dist/
 *.egg-info/
 pip-wheel-metadata/
+*.egg
+
+# Poetry
+# Keep poetry.lock committed for reproducible dev installs.
 
 # Notebook checkpoints
 .ipynb_checkpoints/
 
-# Local env files
+# Local env and token files
 .env
 .env.*
+.mip_token
+mip_token
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cursor / local tooling
+.cursor/
