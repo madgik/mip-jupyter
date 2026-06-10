@@ -8,7 +8,8 @@ COPY ./jupyterhub_shared.py /srv/jupyterhub/jupyterhub_shared.py
 # Install JupyterLab and the local portal python client at build time so
 # compose startup is deterministic and fast.
 COPY ./python-client /tmp/python-client
-RUN pip install --no-cache-dir jupyterlab oauthenticator /tmp/python-client && \
+RUN pip install --no-cache-dir jupyterlab oauthenticator \
+    "pandas>=1.0.0,<4.0.0" "numpy>=1.21.0,<3.0.0" /tmp/python-client && \
     rm -rf /tmp/python-client
 
 # Keep the onboarding notebook inside the image so spawner hook can copy it.
