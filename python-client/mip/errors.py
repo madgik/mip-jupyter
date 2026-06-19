@@ -1,25 +1,17 @@
-"""Notebook-friendly exception types for the MIP library."""
+"""Backward-compatible aliases for public exception types."""
 
+from __future__ import annotations
 
-class MipError(Exception):
-    """Base class for MIP library errors."""
+from .exceptions import MipAlgorithmNotAvailable
+from .exceptions import MipBackendError
+from .exceptions import MipConfigurationError
+from .exceptions import MipError
+from .exceptions import UnsupportedOperationError
 
-
-class MipConfigurationError(MipError):
-    """Raised when no platform-backend client is configured."""
-
-
-class MipBackendError(MipError):
-    """Raised when a platform-backend request or experiment fails."""
-
-
-class MipAlgorithmNotAvailable(MipError):
-    """Raised when a requested algorithm is not available on the backend."""
-
-
-class MipValidationError(MipError):
-    """Raised when user input fails validation."""
-
-
-class MipTransformationError(MipError):
-    """Raised when a transformation cannot be applied or serialized."""
+__all__ = [
+    "MipAlgorithmNotAvailable",
+    "MipBackendError",
+    "MipConfigurationError",
+    "MipError",
+    "UnsupportedOperationError",
+]

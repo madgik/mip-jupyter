@@ -1,15 +1,13 @@
-"""ASCII metadata tree rendering for catalog visualization."""
+"""ASCII metadata tree rendering for catalog discovery in notebooks."""
 
 from __future__ import annotations
 
-import builtins
 from dataclasses import dataclass
 from typing import Any
 from typing import Iterable
 from typing import Mapping
-from typing import Optional
 
-from .data_model import DataModel
+from .datamodel import DataModel
 
 
 class MetadataTree(str):
@@ -18,54 +16,53 @@ class MetadataTree(str):
     def __repr__(self) -> str:
         return str(self)
 
-    def display(self) -> None:
-        try:
-            from IPython.display import HTML
-            from IPython.display import display
-        except ImportError:
-            print(self)
-            return
-
+    def _repr_html_(self) -> str:
         escaped = (
             str(self)
             .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
         )
-        display(HTML(f"<pre>{escaped}</pre>"))
+        return f"<pre>{escaped}</pre>"
+
+    def display(self) -> None:
+        try:
+            from IPython.display import display
+        except ImportError:
+            print(self)
+            return
+        display(self)
 
 
 @dataclass(frozen=True)
 class PathologyView:
     """Notebook-friendly view of a backend data model."""
 
-    code: Optional[str]
-    version: Optional[str]
-    label: Optional[str]
-    longitudinal: Optional[bool]
-    variables: list
-    groups: list
-    datasets: list
-    datasets_variables: Mapping[str, list]
+    code: str | None
+    version: str | None
+    label: str | None
+    longitudinal: bool | None
+    variables: list[Any]
+    groups: list[Any]
+    datasets: list[Any]
+    datasets_variables: Mapping[str, list[Any]]
 
     @property
     def name(self) -> str:
-        code = self.code or ""
-        version = self.version or ""
-        if code and version:
-            return f"{code}:{version}"
-        return code or version
+        if self.code and self.version:
+            return f"{self.code}:{self.version}"
+        return str(self.code or self.version or "")
 
 
-def pathology_from_model(model: DataModel) -> PathologyView:
+def pathology_from_data_model(model: DataModel) -> PathologyView:
     return PathologyView(
         code=model.code,
         version=model.version,
         label=model.label,
         longitudinal=model.longitudinal,
-        variables=builtins.list(model.variables or []),
-        groups=builtins.list(model.groups or []),
-        datasets=builtins.list(model.datasets or []),
+        variables=list(model.root_variables()),
+        groups=list(model.groups or []),
+        datasets=[dataset.metadata() for dataset in model.datasets.to_list()],
         datasets_variables=dict(model.datasets_variables or {}),
     )
 
@@ -77,7 +74,7 @@ def render_catalog_tree(models: list[DataModel], *, max_lines: int = 250) -> str
         return writer.render()
 
     ordered = sorted(
-        [pathology_from_model(model) for model in models],
+        [pathology_from_data_model(model) for model in models],
         key=lambda model: ((model.code or "").lower(), str(model.version or "").lower()),
     )
     for index, model in enumerate(ordered):
@@ -102,7 +99,19 @@ def render_pathology_tree(
     *,
     include_variables: bool = False,
     max_lines: int = 250,
+    focus_group: Any | None = None,
+    focus_group_path: list[str] | None = None,
 ) -> str:
+    if focus_group is not None:
+        return render_group_subtree(
+            focus_group,
+            model_name=pathology.name,
+            model_label=pathology.label,
+            group_path=focus_group_path,
+            include_variables=include_variables,
+            max_lines=max_lines,
+        )
+
     writer = _LineWriter(max_lines=max_lines)
     title = f"Metadata tree for {pathology.name or '<unknown>'}"
     if pathology.label and pathology.label != pathology.name:
@@ -158,6 +167,90 @@ def render_pathology_tree(
             continue
 
     return writer.render()
+
+
+def render_group_subtree(
+    group: Any,
+    *,
+    model_name: str | None = None,
+    model_label: str | None = None,
+    group_path: list[str] | None = None,
+    include_variables: bool = True,
+    max_lines: int = 250,
+) -> str:
+    writer = _LineWriter(max_lines=max_lines)
+    path_parts = [str(part) for part in (group_path or []) if part]
+    if not path_parts:
+        path_parts = [_format_name_label(_item_get(group, "code"), _item_get(group, "label"))]
+    path_text = " > ".join(path_parts)
+    if model_name:
+        title = f"Metadata tree for {model_name}"
+        if model_label and model_label != model_name:
+            title += f" ({model_label})"
+        title += f" > {path_text}"
+    else:
+        title = f"Variables > {path_text}"
+    writer.add(title)
+    _render_group(
+        writer=writer,
+        group=group,
+        prefix="",
+        is_last=True,
+        include_variables=include_variables,
+    )
+    return writer.render()
+
+
+def find_group(groups: Iterable[Any], selector: Any) -> tuple[Any, list[str]] | None:
+    needle = _group_selector(selector)
+    if not needle:
+        return None
+
+    def visit(group: Any, path: list[str]) -> tuple[Any, list[str]] | None:
+        code = str(_item_get(group, "code") or "").strip()
+        label = str(_item_get(group, "label") or "").strip()
+        current_path = path + [code or label or "<unknown>"]
+        if _matches_group_selector(group, needle):
+            return group, current_path
+        for child in _item_get(group, "groups", default=[]):
+            found = visit(child, current_path)
+            if found is not None:
+                return found
+        return None
+
+    for group in _as_list(groups):
+        found = visit(group, [])
+        if found is not None:
+            return found
+    return None
+
+
+def list_groups(groups: Iterable[Any]) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+
+    def visit(group: Any, path: list[str]) -> None:
+        code = str(_item_get(group, "code") or "").strip()
+        label = str(_item_get(group, "label") or "").strip()
+        current_path = path + [code or label or "<unknown>"]
+        items.append({"code": code or None, "label": label or None, "path": current_path})
+        for child in _item_get(group, "groups", default=[]):
+            visit(child, current_path)
+
+    for group in _as_list(groups):
+        visit(group, [])
+    return items
+
+
+def _group_selector(selector: Any) -> str:
+    if isinstance(selector, Mapping):
+        return str(selector.get("code") or selector.get("label") or "").strip().lower()
+    return str(selector or "").strip().lower()
+
+
+def _matches_group_selector(group: Any, needle: str) -> bool:
+    code = str(_item_get(group, "code") or "").strip().lower()
+    label = str(_item_get(group, "label") or "").strip().lower()
+    return needle in {code, label}
 
 
 class _LineWriter:
@@ -241,10 +334,10 @@ def _count_group_variables(groups: Iterable[Any]) -> int:
 def _as_list(value: Any) -> list:
     if value is None:
         return []
-    if isinstance(value, builtins.list):
+    if isinstance(value, list):
         return value
     if isinstance(value, tuple):
-        return builtins.list(value)
+        return list(value)
     return [value]
 
 

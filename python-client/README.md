@@ -1,6 +1,6 @@
 # MIP Python client
 
-Notebook-facing library for MIP federated analysis via platform-backend transient experiments.
+Notebook-facing library for MIP federated analysis via platform-backend experiments.
 
 ## Install
 
@@ -22,15 +22,24 @@ poetry install --with notebook
 
 ## API overview
 
-| Module | Purpose |
+| Object | Purpose |
 |--------|---------|
-| `catalog` | List data models, datasets, visualize metadata (before `Context`) |
-| `Context` | Immutable analysis state (`data_model`, `datasets`, filters, transformations) |
-| `Analysis` | `transformations`, `cohorts`, `describe`, `tests`, `models` namespaces |
-| `configure` | Set platform-backend URL and token |
+| `Client` | Owns backend transport and creates catalog/algorithm/experiment facades |
+| `ExperimentRegistry` | Lists, reads, and deletes persisted experiments |
+| `Catalog` | Discovers data models, variables, and datasets |
+| `AnalysisSet` | Holds selected data model, datasets, and variables |
+| `Pipeline` | Applies filters/preprocessing and executes named algorithms |
+| `F` | Builds backend-compatible filter expressions |
+| `MissingValuesHandler`, `OutlierWinsorizer` | Build preprocessing payloads |
+| `Result`, `ModelResult` | Wrap raw backend results and logistic-regression sklearn export |
+| `mip.sklearn` | Builds sklearn estimators from supported backend model output |
+
+## Removed old API
+
+The MVP is a strict replacement. Legacy notebook APIs such as `configure`, `Context`, namespace `Analysis`, and `ResultTable` are no longer part of this package.
 
 ## Test
 
 ```bash
-poetry run python -m unittest discover -s tests -p "test_*.py"
+python3 -m unittest discover -s tests -p "test_*.py"
 ```

@@ -12,5 +12,6 @@ RUN pip install --no-cache-dir jupyterlab oauthenticator \
     "pandas>=1.0.0,<4.0.0" "numpy>=1.21.0,<3.0.0" /tmp/python-client && \
     rm -rf /tmp/python-client
 
-# Keep the Feres analysis notebook inside the image so spawner hook can copy it.
+# Notebooks copied by the hub spawner hook into user workspaces.
+COPY ./Welcome.ipynb /opt/portal-notebooks/Welcome.ipynb
 COPY ./feres_analysis.ipynb /opt/platform-notebooks/feres_analysis.ipynb

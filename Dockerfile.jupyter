@@ -5,9 +5,6 @@ FROM ${JUPYTER_SCIPY_IMAGE}
 # Switch to root to install system dependencies if needed
 USER root
 
-# Install any system dependencies
-# RUN apt-get update && apt-get install -y ...
-
 # Switch back to jovyan user
 USER ${NB_UID}
 
@@ -18,11 +15,13 @@ COPY --chown=${NB_UID}:${NB_GID} ./python-client /tmp/python-client
 RUN pip install /tmp/python-client && \
     rm -rf /tmp/python-client
 
-# Keep a source copy of the Feres analysis notebook in the image.
+# Ship onboarding and example notebooks.
+COPY --chown=${NB_UID}:${NB_GID} ./Welcome.ipynb /opt/portal-notebooks/Welcome.ipynb
 COPY --chown=${NB_UID}:${NB_GID} ./feres_analysis.ipynb /opt/platform-notebooks/feres_analysis.ipynb
 
-# Also seed the default working directory for non-mounted setups.
+# Seed the default working directory for non-mounted setups.
 RUN mkdir -p /home/jovyan/work && \
+    cp /opt/portal-notebooks/Welcome.ipynb /home/jovyan/work/Welcome.ipynb && \
     cp /opt/platform-notebooks/feres_analysis.ipynb /home/jovyan/work/feres_analysis.ipynb
 
 # Disable extensions known to be incompatible with the pinned JupyterLab version.
@@ -34,5 +33,5 @@ RUN jupyter labextension disable @jupyterlab/git --level=user || true && \
 # Match frontend defaults unless overridden at runtime.
 ENV JUPYTER_BASE_URL=/jupyter
 
-# Ensure feres_analysis.ipynb exists in the active workspace and open JupyterLab by default.
-CMD ["bash", "-lc", "if [ ! -f /home/jovyan/work/feres_analysis.ipynb ]; then cp /opt/platform-notebooks/feres_analysis.ipynb /home/jovyan/work/feres_analysis.ipynb; fi; start-notebook.py --ServerApp.base_url=\"${JUPYTER_BASE_URL}\" --ServerApp.root_dir=/home/jovyan/work --ServerApp.default_url=/lab"]
+# Ensure notebooks exist in the active workspace and open the getting-started notebook.
+CMD ["bash", "-lc", "mkdir -p /home/jovyan/work; if [ ! -f /home/jovyan/work/Welcome.ipynb ]; then cp /opt/portal-notebooks/Welcome.ipynb /home/jovyan/work/Welcome.ipynb; fi; if [ ! -f /home/jovyan/work/feres_analysis.ipynb ]; then cp /opt/platform-notebooks/feres_analysis.ipynb /home/jovyan/work/feres_analysis.ipynb; fi; start-notebook.py --ServerApp.base_url=\"${JUPYTER_BASE_URL}\" --ServerApp.root_dir=/home/jovyan/work --ServerApp.default_url=/lab/tree/Welcome.ipynb"]

@@ -1,29 +1,31 @@
 import unittest
+from types import SimpleNamespace
 
-from mip import FilterGroup
-from mip import Rule
+from mip.filters import F
 
 
 class TestFilters(unittest.TestCase):
-    def test_rule_serializes_to_backend_format(self):
-        payload = Rule("stroke_territory", "in", ["anterior_left"]).to_dict()
-        self.assertEqual(payload["id"], "stroke_territory")
-        self.assertEqual(payload["operator"], "in")
-        self.assertEqual(payload["value"], ["anterior_left"])
+    def test_operator_serializes_variable_code(self):
+        age = SimpleNamespace(code="age")
+        payload = (F(age) >= 50).explain()
+        self.assertEqual(payload["field"], "age")
+        self.assertEqual(payload["operator"], "greater_or_equal")
+        self.assertEqual(payload["value"], 50)
 
-    def test_filter_group_and_serializes_nested_rules(self):
-        payload = FilterGroup.and_(
-            Rule("stroke_territory", "in", ["anterior_left"]),
-            Rule("age", ">=", 18),
-        ).to_dict()
-        self.assertEqual(payload["condition"], "AND")
-        self.assertEqual(len(payload["rules"]), 2)
-        self.assertEqual(payload["rules"][1]["operator"], "greater_or_equal")
+    def test_methods_and_composition(self):
+        expr = (F("mmse").is_not_null() & F("sex").isin(["M", "F"])) | ~F("diagnosis").isin(["AD"])
+        payload = expr.explain()
+        self.assertEqual(payload["condition"], "OR")
+        self.assertEqual(payload["rules"][0]["condition"], "AND")
+        self.assertEqual(payload["rules"][1]["operator"], "not_in")
+        self.assertEqual(payload["rules"][1]["value"], ["AD"])
 
-    def test_notebook_operators_map_to_backend(self):
-        self.assertEqual(Rule("x", "==", "a").to_dict()["operator"], "equal")
-        self.assertEqual(Rule("x", "!=", "a").to_dict()["operator"], "not_equal")
-        self.assertEqual(Rule("x", "not_null").to_dict()["operator"], "is_not_null")
+    def test_between_and_to_payload(self):
+        age = SimpleNamespace(code="age")
+        expr = F(age).between(20, 26)
+        payload = expr.to_payload()
+        self.assertEqual(payload["operator"], "between")
+        self.assertEqual(payload["value"], [20, 26])
 
 
 if __name__ == "__main__":

@@ -1,78 +1,70 @@
-"""User-facing analysis object bound to a Context."""
+"""Analysis set selection and simple exploration helpers."""
 
 from __future__ import annotations
 
+from typing import Any
 from typing import Sequence
 
-from .client import get_client
-from .context import Context
-from .errors import MipConfigurationError
-from .transformations import Transformation
-from .transformations import TransformationsNamespace
+from .exceptions import MipConfigurationError
+from .request_builder import build_inputdata
+from .request_builder import code as _code
+from .results import Result
 
 
-class Analysis:
-    """High-level analysis API for notebook workflows."""
+class AnalysisSet:
+    """Selected data model, datasets, and variables for analysis."""
 
-    def __init__(self, context: Context, *, client=None):
-        self._context = context
-        self._client = client
-        self._transformations = TransformationsNamespace(self)
-        self._cohorts = None
-        self._describe = None
-        self._tests = None
-        self._models = None
+    def __init__(self, *, data_model: Any, datasets: Sequence[Any], variables: Sequence[Any]):
+        self.data_model = data_model
+        self.datasets = list(datasets or [])
+        self.variables = list(variables or [])
+        self._transport = getattr(data_model, "_transport", None)
 
-    @property
-    def context(self) -> Context:
-        return self._context
+    def data_model_name(self) -> str:
+        return _data_model_name(self.data_model)
 
-    def _get_client(self):
-        if self._client is not None:
-            return self._client
-        try:
-            return get_client()
-        except Exception as exc:
+    def inputdata(self, *, filters=None, extra_variables: Sequence[Any] | None = None) -> dict:
+        variables = [_code(variable) for variable in self.variables]
+        if extra_variables:
+            seen = set(variables)
+            for variable in extra_variables:
+                item = _code(variable)
+                if item and item not in seen:
+                    seen.add(item)
+                    variables.append(item)
+        return build_inputdata(
+            data_model_name=self.data_model_name(),
+            datasets=self.datasets,
+            variables=variables,
+            filters=filters,
+        )
+
+    def histogram(self, variable: Any, bins: int | None = None, mode: str = "transient") -> Result:
+        from .pipeline import Pipeline
+
+        return Pipeline(analysis_set=self).histogram(variable=variable, bins=bins, mode=mode)
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "data_model": self.data_model_name(),
+            "datasets": [_code(dataset) for dataset in self.datasets],
+            "variables": [_code(variable) for variable in self.variables],
+        }
+
+    def explain(self) -> dict[str, Any]:
+        return self.inputdata()
+
+    def _require_transport(self):
+        if self._transport is None:
             raise MipConfigurationError(
-                "No platform-backend client is configured for this notebook environment."
-            ) from exc
+                "This AnalysisSet is not attached to a Client-created DataModel and cannot execute algorithms."
+            )
+        return self._transport
 
-    def with_transformations(self, transformations: Sequence[Transformation]) -> Analysis:
-        """Return a new Analysis bound to an updated context."""
-        return Analysis(self._context.with_transformations(transformations), client=self._client)
 
-    @property
-    def transformations(self) -> TransformationsNamespace:
-        return self._transformations
-
-    @property
-    def cohorts(self):
-        if self._cohorts is None:
-            from .cohorts import CohortsNamespace
-
-            self._cohorts = CohortsNamespace(self)
-        return self._cohorts
-
-    @property
-    def describe(self):
-        if self._describe is None:
-            from .describe import DescribeNamespace
-
-            self._describe = DescribeNamespace(self)
-        return self._describe
-
-    @property
-    def tests(self):
-        if self._tests is None:
-            from .tests import TestsNamespace
-
-            self._tests = TestsNamespace(self)
-        return self._tests
-
-    @property
-    def models(self):
-        if self._models is None:
-            from .models import ModelsNamespace
-
-            self._models = ModelsNamespace(self)
-        return self._models
+def _data_model_name(data_model: Any) -> str:
+    code = getattr(data_model, "code", None)
+    version = getattr(data_model, "version", None)
+    if code and version:
+        return f"{code}:{version}"
+    return _code(data_model)

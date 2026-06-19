@@ -1,10 +1,7 @@
 import unittest
 from unittest.mock import MagicMock
-from unittest.mock import patch
 
-from mip import MetadataTree
-from mip import catalog
-from mip import configure
+from mip.catalog import Catalog
 
 
 MOCK_DATA_MODELS = [
@@ -16,102 +13,88 @@ MOCK_DATA_MODELS = [
         "variables": [{"code": "dataset", "label": "Dataset", "type": "nominal"}],
         "groups": [
             {
-                "code": "brain",
-                "label": "Brain",
-                "variables": [{"code": "age", "label": "Age", "type": "real"}],
-                "groups": [],
+                "code": "clinical",
+                "label": "Clinical",
+                "variables": [
+                    {"code": "age", "label": "Age", "type": "real"},
+                    {"code": "sex", "label": "Sex", "type": "nominal", "enumerations": {"M": "Male", "F": "Female"}},
+                ],
+                "groups": [
+                    {"code": "cognitive", "label": "Cognitive", "variables": [{"code": "mmse", "label": "MMSE", "type": "integer"}]}
+                ],
             }
         ],
-        "datasets": [{"code": "edsd", "label": "EDSD"}],
-        "datasetsVariables": {"edsd": ["dataset", "age"]},
-    },
-    {
-        "code": "dementia",
-        "version": "0.2",
-        "label": "Dementia v2",
-        "longitudinal": True,
-        "variables": [],
-        "groups": [],
-        "datasets": [{"code": "edsd2", "label": "EDSD 2"}],
-        "datasetsVariables": {},
-    },
+        "datasets": [{"code": "adni", "label": "ADNI"}],
+        "datasetsVariables": {"adni": ["age", "sex", "mmse"]},
+    }
 ]
 
 
 class TestCatalog(unittest.TestCase):
-    def setUp(self):
-        configure(base_url="http://mock-backend", token="mock-token")
+    def test_data_model_builds_collections(self):
+        transport = MagicMock()
+        transport.get.return_value = MOCK_DATA_MODELS
 
-    @patch("mip.data_model.get_client")
-    def test_models_returns_dataframe_columns(self, mock_get_client):
-        client = MagicMock()
-        client.get.return_value = MOCK_DATA_MODELS
-        mock_get_client.return_value = client
+        dm = Catalog(transport).data_model("dementia")
 
-        frame = catalog.models(client=client).to_dataframe()
-        self.assertEqual(len(frame), 2)
-        self.assertIn("name", frame.columns)
-        self.assertEqual(frame.loc[0, "name"], "dementia:0.1")
-        self.assertEqual(frame.loc[0, "n_datasets"], 1)
-        client.get.assert_called_with("/data-models")
+        self.assertEqual(dm.name, "dementia:0.1")
+        self.assertEqual(dm.variables["age"].label, "Age")
+        self.assertEqual(dm.variables["mmse"].code, "mmse")
+        self.assertTrue(dm.variables["age"].is_numerical())
+        self.assertTrue(dm.variables["sex"].is_categorical())
+        self.assertEqual(dm.variables["sex"].categories(), ["M", "F"])
+        self.assertEqual(dm.datasets["adni"].variables()[0].code, "age")
+        self.assertTrue(dm.datasets["adni"].has_variable(dm.variables["mmse"]))
 
-    @patch("mip.data_model.get_client")
-    def test_datasets_returns_rows_for_model(self, mock_get_client):
-        client = MagicMock()
-        client.get.return_value = MOCK_DATA_MODELS
-        mock_get_client.return_value = client
+    def test_search_methods_return_native_lists(self):
+        transport = MagicMock()
+        transport.get.return_value = MOCK_DATA_MODELS
+        catalog = Catalog(transport)
 
-        frame = catalog.datasets("dementia:0.1", client=client).to_dataframe()
-        self.assertEqual(len(frame), 1)
-        self.assertEqual(frame.loc[0, "code"], "edsd")
-        self.assertEqual(frame.loc[0, "label"], "EDSD")
-        self.assertEqual(frame.loc[0, "data_model"], "dementia:0.1")
+        self.assertIsInstance(catalog.list(), list)
+        self.assertEqual(catalog.list()[0].code, "dementia")
+        self.assertIsInstance(catalog.summaries(), list)
+        self.assertEqual(catalog.summaries()[0]["code"], "dementia")
+        self.assertIn("Data models", str(catalog.tree()))
+        self.assertIsInstance(catalog.search_variables("MMSE"), list)
+        self.assertEqual(catalog.search_variables("MMSE")[0].code, "mmse")
+        self.assertIsInstance(catalog.search_datasets("adni"), list)
+        self.assertEqual(catalog.search_datasets("adni")[0].code, "adni")
+        dm = catalog.data_model("dementia")
+        self.assertIsInstance(dm.variables.search("MMSE"), list)
+        self.assertEqual(dm.variables.search("MMSE")[0].code, "mmse")
 
-    @patch("mip.data_model.get_client")
-    def test_get_resolves_unambiguous_code(self, mock_get_client):
-        client = MagicMock()
-        client.get.return_value = [MOCK_DATA_MODELS[0]]
-        mock_get_client.return_value = client
+    def test_data_model_list_and_tree_helpers(self):
+        transport = MagicMock()
+        transport.get.return_value = MOCK_DATA_MODELS
+        dm = Catalog(transport).data_model("dementia")
 
-        model = catalog.get("dementia", client=client)
-        self.assertEqual(model.name, "dementia:0.1")
+        self.assertEqual(dm.list_datasets()[0]["code"], "adni")
+        self.assertEqual(dm.datasets.list()[0].code, "adni")
+        self.assertEqual(dm.list_variables()[0]["code"], "dataset")
+        self.assertIn("groups", str(dm.tree()))
+        self.assertIn("MMSE", str(dm.tree(include_variables=True)))
+        self.assertIn("MMSE", str(dm.variables.tree()))
+        self.assertIn("Clinical", str(dm.tree(group="clinical", include_variables=True)))
+        self.assertIn("MMSE", str(dm.tree(group="cognitive", include_variables=True)))
+        self.assertIn("MMSE", str(dm.variables.tree(group="cognitive")))
+        self.assertEqual(
+            [item["code"] for item in dm.list_groups()],
+            ["clinical", "cognitive"],
+        )
 
-    @patch("mip.data_model.get_client")
-    def test_get_raises_for_ambiguous_code(self, mock_get_client):
-        client = MagicMock()
-        client.get.return_value = MOCK_DATA_MODELS
-        mock_get_client.return_value = client
-
+    def test_unknown_group_raises_lookup_error(self):
+        transport = MagicMock()
+        transport.get.return_value = MOCK_DATA_MODELS
+        dm = Catalog(transport).data_model("dementia")
         with self.assertRaises(LookupError):
-            catalog.get("dementia", client=client)
+            dm.tree(group="missing")
 
-    @patch("mip.data_model.get_client")
-    def test_visualize_renders_tree_with_groups_and_datasets(self, mock_get_client):
-        client = MagicMock()
-        client.get.return_value = [MOCK_DATA_MODELS[0]]
-        mock_get_client.return_value = client
-
-        tree = catalog.visualize("dementia:0.1", include_variables=True, client=client)
-        self.assertIsInstance(tree, MetadataTree)
-        text = str(tree)
-        self.assertIn("Metadata tree for dementia:0.1", text)
-        self.assertIn("EDSD", text)
-        self.assertIn("Brain", text)
-        self.assertIn("Age [real]", text)
-
-    @patch("mip.data_model.get_client")
-    def test_visualize_all_renders_catalog_summary(self, mock_get_client):
-        client = MagicMock()
-        client.get.return_value = MOCK_DATA_MODELS
-        mock_get_client.return_value = client
-
-        tree = catalog.visualize_all(client=client)
-        self.assertIn("Data models (2)", str(tree))
-        self.assertIn("Dementia:0.1", str(tree))
-
-    def test_metadata_tree_display_fallback(self):
-        tree = MetadataTree("line one\nline two")
-        tree.display()
+    def test_ambiguous_data_model_requires_version(self):
+        transport = MagicMock()
+        transport.get.return_value = [*MOCK_DATA_MODELS, {**MOCK_DATA_MODELS[0], "version": "0.2"}]
+        with self.assertRaises(LookupError):
+            Catalog(transport).data_model("dementia")
 
 
 if __name__ == "__main__":

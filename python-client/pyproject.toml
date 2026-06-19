@@ -9,6 +9,7 @@ dependencies = [
     "requests>=2.25.0,<3.0.0",
     "pandas>=1.0.0,<4.0.0",
     "numpy>=1.21.0,<3.0.0",
+    "scikit-learn>=1.0.0,<2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,7 @@ python = ">=3.10,<3.13"
 requests = ">=2.25.0,<3.0.0"
 pandas = ">=1.0.0,<4.0.0"
 numpy = ">=1.21.0,<3.0.0"
+scikit-learn = ">=1.0.0,<2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.0.0,<9.0.0"

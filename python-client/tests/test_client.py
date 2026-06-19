@@ -1,71 +1,109 @@
+import os
 import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-import requests
-
-from mip import configure
-from mip.client import PlatformBackendClient
-from mip.errors import MipConfigurationError
-from mip.client import get_client
+from mip import Client
+from mip.exceptions import MipBackendError
+from mip.exceptions import MipConfigurationError
+from mip.transport import Transport
 
 
-class TestPlatformBackendClientConfiguration(unittest.TestCase):
-    def test_get_client_requires_configure(self):
-        import mip.client as client_module
+class TestClient(unittest.TestCase):
+    def test_from_env_reads_mip_environment(self):
+        with patch.dict(os.environ, {"MIP_BASE_URL": "http://backend/services", "MIP_TOKEN": "token"}, clear=True):
+            client = Client.from_env()
+        self.assertEqual(client._transport.base_url, "http://backend/services/")
+        self.assertEqual(client._transport.token, "token")
 
-        client_module._client_instance = None
-        with self.assertRaises(MipConfigurationError):
-            get_client()
+    def test_from_env_reads_mip_token_with_platform_backend_url(self):
+        with patch.dict(
+            os.environ,
+            {"PLATFORM_BACKEND_URL": "http://backend/services", "MIP_TOKEN": "mip-token"},
+            clear=True,
+        ):
+            client = Client.from_env()
+        self.assertEqual(client._transport.base_url, "http://backend/services/")
+        self.assertEqual(client._transport.token, "mip-token")
 
-    def test_configure_sets_singleton(self):
-        configure(base_url="http://mock-backend", token="mock-token")
-        client = get_client()
-        self.assertEqual(client.base_url, "http://mock-backend")
-        self.assertEqual(client.token, "mock-token")
+    def test_from_env_prefers_platform_backend_url(self):
+        with patch.dict(
+            os.environ,
+            {
+                "PLATFORM_BACKEND_URL": "http://platform/services",
+                "MIP_BASE_URL": "http://mip/services",
+                "PLATFORM_TOKEN": "platform-token",
+            },
+            clear=True,
+        ):
+            client = Client.from_env()
+        self.assertEqual(client._transport.base_url, "http://platform/services/")
+        self.assertEqual(client._transport.token, "platform-token")
 
+    def test_from_env_requires_base_url(self):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(MipConfigurationError):
+                Client.from_env()
 
-class TestPlatformBackendClientBaseUrlResolution(unittest.TestCase):
-    @patch("mip.client.socket.getaddrinfo")
-    def test_prefers_localhost_when_compose_host_is_unresolvable(self, mock_getaddrinfo):
-        def side_effect(host, _port):
-            if host in ("platform-backend", "platform-backend-service"):
-                raise OSError("unresolvable")
-            return [(None, None, None, None, None)]
+    def test_client_does_not_expose_http_methods(self):
+        client = Client("http://backend/services")
+        self.assertFalse(hasattr(client, "get"))
+        self.assertFalse(hasattr(client, "post"))
 
-        mock_getaddrinfo.side_effect = side_effect
-        client = PlatformBackendClient(token="mock-token")
-        self.assertEqual(client.base_url, "http://localhost:8080/services")
-
-    @patch("mip.client.requests.Session.get")
-    @patch("mip.client.socket.getaddrinfo")
-    def test_falls_back_to_next_candidate_on_connection_error(self, mock_getaddrinfo, mock_get):
-        def resolve_side_effect(host, _port):
-            if host == "platform-backend-service":
-                raise OSError("unresolvable")
-            return [(None, None, None, None, None)]
-
-        mock_getaddrinfo.side_effect = resolve_side_effect
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.headers = {"Content-Type": "application/json"}
-        mock_response.content = b'{"experiments":[]}'
-        mock_response.json.return_value = {"experiments": []}
-        mock_response.raise_for_status.return_value = None
-
-        mock_get.side_effect = [
-            requests.exceptions.ConnectionError(
-                "Failed to resolve 'platform-backend' (NameResolutionError)"
-            ),
-            mock_response,
+    def test_experiment_registry_maps_public_methods_to_backend_endpoints(self):
+        client = Client("http://backend/services")
+        transport = MagicMock()
+        client._transport = transport
+        transport.get.side_effect = [
+            {"items": [{"id": "exp-1"}]},
+            {"id": "exp-1", "status": "success"},
         ]
 
-        client = PlatformBackendClient(token="mock-token")
-        payload = client.get("/experiments", params={"size": 10, "page": 0})
+        registry = client.experiments()
 
-        self.assertEqual(payload, {"experiments": []})
-        self.assertEqual(client.base_url, "http://localhost:8080/services")
+        self.assertEqual(registry.list(), [{"id": "exp-1"}])
+        self.assertEqual(registry.get("exp-1"), {"id": "exp-1", "status": "success"})
+        self.assertIsNone(registry.delete("exp-1"))
+        transport.get.assert_any_call("/experiments")
+        transport.get.assert_any_call("/experiments/exp-1")
+        transport.delete.assert_called_once_with("/experiments/exp-1")
+
+
+class TestTransport(unittest.TestCase):
+    @patch("mip.transport.requests.Session")
+    def test_get_joins_base_url_and_returns_json(self, session_cls):
+        response = MagicMock()
+        response.status_code = 200
+        response.content = b'{"ok": true}'
+        response.json.return_value = {"ok": True}
+        session = session_cls.return_value
+        session.request.return_value = response
+
+        transport = Transport("http://backend/services", token="token")
+        payload = transport.get("/data-models", params={"q": "x"})
+
+        self.assertEqual(payload, {"ok": True})
+        session.headers.update.assert_called_with({"Authorization": "Bearer token"})
+        session.request.assert_called_with(
+            "GET",
+            "http://backend/services/data-models",
+            timeout=30.0,
+            allow_redirects=False,
+            params={"q": "x"},
+        )
+
+    @patch("mip.transport.requests.Session")
+    def test_backend_error_is_wrapped(self, session_cls):
+        response = MagicMock()
+        response.status_code = 500
+        response.text = "boom"
+        response.json.side_effect = ValueError("not json")
+        response.headers = {}
+        session_cls.return_value.request.return_value = response
+
+        transport = Transport("http://backend/services")
+        with self.assertRaises(MipBackendError):
+            transport.get("/data-models")
 
 
 if __name__ == "__main__":
