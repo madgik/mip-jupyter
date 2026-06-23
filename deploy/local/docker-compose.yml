@@ -1,0 +1,16 @@
+services:
+  mip-jupyter:
+    build:
+      context: ../..
+      dockerfile: docker/singleuser/Dockerfile
+    ports:
+      - "8888:8888"
+    environment:
+      PLATFORM_BACKEND_URL: ${PLATFORM_BACKEND_URL:-http://host.docker.internal:8080/services}
+      MIP_TOKEN: ${MIP_TOKEN:-}
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:-dev}
+    volumes:
+      - mip-jupyter-work:/home/jovyan/work
+
+volumes:
+  mip-jupyter-work:
