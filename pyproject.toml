@@ -5,6 +5,9 @@ description = "Local development runner for mip-jupyter notebooks"
 requires-python = ">=3.10,<3.13"
 dependencies = [
     "mip[notebook]",
+    "jupyterlab>=4.4,<4.6",
+    "jupyter-ai>=3,<4",
+    "matplotlib>=3.7.0,<4.0.0",
     "notebook>=7.0.0,<8.0.0",
     "ipykernel>=6.0.0,<8.0.0",
     "nbconvert>=7.0.0,<8.0.0",
@@ -12,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 mip-notebook = "mip_jupyter_dev.notebook:main"
+mip-jupyter-mcp = "mip_jupyter_dev.jupyter_mcp_cli:main"
 
 [tool.uv.sources]
 mip = { path = "python-client", editable = true }
