@@ -1,0 +1,65 @@
+# MIP Python Client — API Reference
+
+Thin client over platform-backend. Notebooks never call Exaflow directly.
+
+## Imports
+
+```python
+import mip
+from mip.filters import F
+from mip.preprocessing import CategoricalColumnCreator, MissingValuesHandler, OutlierWinsorizer
+```
+
+## Client and catalog
+
+```python
+client = mip.Client.from_env()
+catalog = client.catalog()
+dm = catalog.data_model("code", version="x.y")  # version optional
+dm.datasets["name"]
+dm.variables["code"]
+dm.variables.search("text")
+```
+
+## Filters
+
+```python
+(F(age) >= 50) & F(mmse).is_not_null()
+F(diagnosis).isin(["AD", "CN"])
+F(mmse).between(20, 26)
+expr1 | expr2
+```
+
+## Preprocessing
+
+```python
+MissingValuesHandler(strategies={age: "median", mmse: "mean"})
+OutlierWinsorizer(strategies={mmse: "iqr"}, tails={mmse: "both"}, folds={mmse: 1.5})
+CategoricalColumnCreator(code="cohort", rules={...}, default_enumeration="other")
+```
+
+## Pipeline algorithms
+
+`describe`, `histogram`, `t_test`, `pearson_correlation`, `chi_square_test`, `logistic_regression`
+
+```python
+pipeline = mip.Pipeline(analysis_set=..., filters=..., handle_missing=...)
+pipeline.histogram(variable=mmse, bins=20)
+pipeline.logistic_regression(x=[age, sex], y=diagnosis, positive_class="AD")
+```
+
+## Results
+
+```python
+result.summary()
+result.raw
+result.payload
+logreg.to_sklearn()  # logistic regression only
+```
+
+## Registries
+
+```python
+client.algorithms().list()
+client.experiments().list()
+```

@@ -58,7 +58,7 @@ mip/
   errors.py          # compatibility aliases for exception imports only
 ```
 
-`Welcome.ipynb` is the runnable companion to this contract.
+`workspace/Welcome.ipynb` is the runnable companion to this contract.
 
 ## Public API
 
@@ -73,7 +73,7 @@ algorithms = client.algorithms()
 experiments = client.experiments()
 ```
 
-Runnable companion notebook: `Welcome.ipynb`.
+Runnable companion notebook: `workspace/Welcome.ipynb`.
 
 `Client.from_env()` reads:
 

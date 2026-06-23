@@ -1,18 +1,45 @@
 # mip-jupyter
 
-Jupyter and JupyterHub image assets plus the `mip` Python client for federated analysis via platform-backend.
+JupyterLab environment and the `mip` Python client for federated analysis via platform-backend.
 
-## Repository Layout
+## For production Jupyter users
 
-- `Dockerfile.jupyter` - single-user Jupyter image that installs the client and ships notebooks
-- `Dockerfile.jupyterhub` - JupyterHub image with JupyterLab, OAuth helpers, and the client
-- `Welcome.ipynb` - getting-started notebook for the MVP `mip` API
-- `feres_analysis.ipynb` - Feres stroke territory example notebook
-- `python-client/mip/` - `mip` package source
-- `python-client/tests/` - mocked unit tests
-- `expected_library.md` - public API contract
+When you open Jupyter in production, your working directory contains onboarding material only:
 
-## Local Notebook Setup
+```text
+Welcome.ipynb
+examples/
+docs/
+scratch/
+```
+
+The `mip` package is pre-installed. Import it directly — you do not edit client source in this workspace:
+
+```python
+import mip
+
+client = mip.Client.from_env()
+```
+
+Start with `Welcome.ipynb`, then see `docs/mip-client-quickstart.md` and `examples/feres_analysis.ipynb`. Save your own work under `scratch/`.
+
+## For developers and operators
+
+### Repository layout
+
+| Path | Purpose |
+|------|---------|
+| `workspace/` | Production user-facing notebooks and docs (seeded into `/home/jovyan/work`) |
+| `python-client/` | `mip` package source and tests |
+| `docker/singleuser/` | Single-user Jupyter image |
+| `docker/hub/` | JupyterHub image and config |
+| `deploy/local/` | Local Docker Compose |
+| `mip_jupyter_dev/` | Local JupyterLab runner with Codex/MCP |
+| `docs/` | Architecture, layout, release process |
+
+See [`docs/repository-layout.md`](docs/repository-layout.md) and [`docs/architecture.md`](docs/architecture.md).
+
+### Local notebook development
 
 Use `uv` from the repository root:
 
@@ -21,21 +48,35 @@ uv sync
 uv run mip-notebook
 ```
 
-The notebook runner opens `feres_analysis.ipynb` on `127.0.0.1:8888` with token `dev`. It defaults `PLATFORM_BACKEND_URL` to `http://127.0.0.1:8080/services` unless `PLATFORM_BACKEND_URL` or `MIP_BASE_URL` is already set.
+The runner opens JupyterLab with `workspace/examples/feres_analysis.ipynb` on `127.0.0.1:8888` and token `dev`. It defaults `PLATFORM_BACKEND_URL` to `http://127.0.0.1:8080/services` unless `PLATFORM_BACKEND_URL` or `MIP_BASE_URL` is already set.
+
+The runner also creates a temporary Codex configuration for Jupyter AI. Codex is the default chat persona and is configured to use the local North vLLM endpoint at `http://100.92.46.71:8001/v1`.
+
+It starts a curated Jupyter MCP wrapper server by default so notebooks can be created and edited through MCP without exposing the full raw Jupyter MCP schema to North vLLM.
+
+Codex uses that MCP server through the shell bridge `python -m mip_jupyter_dev.jupyter_mcp_cli` because North vLLM currently rejects native Responses `mcp` tool payloads with `Object of type Undefined is not JSON serializable`.
+
+The MCP bridge uses the first free local port at or above `3001` unless `JUPYTER_MCP_PORT` or `--mcp-port` is set.
 
 Open:
 
 ```text
-http://127.0.0.1:8888/tree/feres_analysis.ipynb?token=dev
+http://127.0.0.1:8888/lab/tree/workspace/examples/feres_analysis.ipynb?token=dev
 ```
 
-To open a different notebook:
+To open the getting-started notebook:
 
 ```bash
-MIP_NOTEBOOK=Welcome.ipynb uv run mip-notebook
+MIP_NOTEBOOK=workspace/Welcome.ipynb uv run mip-notebook
 ```
 
-## Install Without UV
+To override the local Codex model endpoint:
+
+```bash
+CODEX_VLLM_BASE_URL=http://127.0.0.1:8001/v1 uv run mip-notebook
+```
+
+### Install without uv
 
 ```bash
 cd python-client && poetry install
@@ -47,7 +88,25 @@ Or:
 python3 -m pip install -e ./python-client
 ```
 
-## Quick Start
+### Docker images
+
+Build from the repository root:
+
+```bash
+docker build -f docker/singleuser/Dockerfile -t mip-jupyter:latest .
+docker build -f docker/hub/Dockerfile -t mip-jupyterhub:latest .
+```
+
+Local Compose:
+
+```bash
+cp deploy/local/.env.example deploy/local/.env
+docker compose -f deploy/local/docker-compose.yml up --build
+```
+
+The single-user image installs `mip` as a package, seeds `/home/jovyan/work` from `workspace/`, and does not expose `python-client/` or deployment files in the Jupyter file browser.
+
+### Quick start (API)
 
 ```python
 import mip
@@ -78,9 +137,9 @@ histogram = pipeline.histogram(variable=mmse, bins=20)
 histogram.summary()
 ```
 
-See [`expected_library.md`](expected_library.md) and [`Welcome.ipynb`](Welcome.ipynb) for the full MVP API.
+See [`expected_library.md`](expected_library.md) and [`workspace/Welcome.ipynb`](workspace/Welcome.ipynb) for the full MVP API.
 
-## Environment Variables
+### Environment variables
 
 `Client.from_env()` reads:
 
@@ -93,7 +152,7 @@ JupyterHub also injects `JUPYTERHUB_API_URL` and `JUPYTERHUB_API_TOKEN` for auto
 
 Tests use mocked HTTP only and do not require live services.
 
-## Tests
+### Tests
 
 ```bash
 uv run python -m unittest discover -s python-client/tests -p "test_*.py"
@@ -107,18 +166,13 @@ cd python-client && python3 -m unittest discover -s tests -p "test_*.py"
 python3 python-client/verify_script.py
 ```
 
-## Build Images
+### Jupyter AI Codex prototype
 
-```bash
-docker build \
-  --build-arg JUPYTER_SCIPY_IMAGE=jupyter/scipy-notebook@sha256:<digest> \
-  -f Dockerfile.jupyter -t mip-jupyter:dev .
-docker build -f Dockerfile.jupyterhub -t mip-jupyterhub:dev .
-```
+The local JupyterLab runner includes Jupyter AI v3 for local agent testing. See [`docs/jupyter-ai-codex.md`](docs/jupyter-ai-codex.md) for Codex ACP setup, local North vLLM configuration, and manual verification steps.
 
-Pin `JUPYTER_SCIPY_IMAGE` to a digest for reproducible builds.
+Agent onboarding wiki: [`docs/llm/INDEX.md`](docs/llm/INDEX.md) (task-scoped docs for Jupyter AI Codex).
 
-## Development Notes
+### Development notes
 
 - Mock HTTP in tests; no live backend in unit tests
 - Never commit real tokens
