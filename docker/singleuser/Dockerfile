@@ -8,7 +8,8 @@ ENV PYTHONUNBUFFERED=1 \
     JUPYTER_HOST=0.0.0.0 \
     JUPYTER_PORT=8888 \
     MIP_WORK_DIR=/home/jovyan/work \
-    MIP_WORKSPACE_TEMPLATE=/opt/mip-workspace-template
+    MIP_WORKSPACE_TEMPLATE=/opt/mip-workspace-template \
+    MIP_JUPYTER_ROOT=/home/jovyan/work
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends tini \
@@ -18,10 +19,16 @@ RUN apt-get update \
 
 WORKDIR /opt/mip-build
 COPY python-client/ ./python-client/
+COPY pyproject.toml ./
+COPY mip_jupyter_dev/ ./mip_jupyter_dev/
 RUN uv pip install --system \
     "./python-client[notebook]" \
     "jupyterlab>=4.4,<4.6" \
-    "ipykernel>=6,<8"
+    "jupyter-ai>=3,<4" \
+    "notebook>=7.0.0,<8.0.0" \
+    "nbconvert>=7.0.0,<8.0.0" \
+    "ipykernel>=6,<8" \
+    && uv pip install --system --no-deps .
 
 COPY workspace/ "${MIP_WORKSPACE_TEMPLATE}/"
 COPY docker/singleuser/entrypoint.sh /usr/local/bin/mip-jupyter-entrypoint.sh

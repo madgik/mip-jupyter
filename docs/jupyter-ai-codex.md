@@ -73,8 +73,8 @@ The runner starts a curated Jupyter MCP wrapper server by default. It does not f
 Instead, Codex receives `JUPYTER_MCP_URL` and model instructions to call the MCP server through the shell bridge:
 
 ```bash
-python -m mip_jupyter_dev.jupyter_mcp_cli create-notebook mcp_probe.ipynb
-python -m mip_jupyter_dev.jupyter_mcp_cli add-markdown mcp_probe.ipynb "MCP OK"
+python -m mip_jupyter_dev.jupyter_mcp_cli create-notebook scratch/mcp_probe.ipynb
+python -m mip_jupyter_dev.jupyter_mcp_cli append-markdown scratch/mcp_probe.ipynb "MCP OK"
 ```
 
 The bridge still calls the Jupyter MCP server; it just avoids sending a native Responses `mcp` tool type to North vLLM. Native MCP forwarding can be enabled with `CODEX_ENABLE_NATIVE_JUPYTER_MCP=1` only for providers that support Responses MCP tools.
@@ -90,7 +90,7 @@ CODEX_VLLM_BASE_URL=http://127.0.0.1:8001/v1 uv run mip-notebook
 If the shell bridge regresses, native MCP forwarding should remain disabled for North vLLM. Verify the MCP server directly with:
 
 ```bash
-python -m mip_jupyter_dev.jupyter_mcp_cli read-notebook workspace/examples/feres_analysis.ipynb
+python -m mip_jupyter_dev.jupyter_mcp_cli notebook-outline workspace/examples/feres_analysis.ipynb
 ```
 
 For parallel local JupyterLab instances, use a different JupyterLab port. The runner chooses a free MCP port automatically unless `JUPYTER_MCP_PORT` or `--mcp-port` is set:
@@ -125,11 +125,12 @@ curl http://100.92.46.71:8001/v1/responses \
 
 Jupyter AI Codex is steered by a layered wiki instead of ad-hoc repo exploration:
 
-- [`AGENTS.md`](../AGENTS.md) — bootstrap entry point (scope, routing, guardrails)
+- [`workspace/docs/agent-guide.md`](../workspace/docs/agent-guide.md) — production workspace guide for Jupyter agents
+- [`AGENTS.md`](../AGENTS.md) — repository bootstrap entry point for development work
 - [`docs/llm/INDEX.md`](../docs/llm/INDEX.md) — wiki map and task routing table
 - [`docs/llm/wiki/`](../docs/llm/wiki/) — task-scoped pages (onboarding, workflow, API cheat sheet, MCP, env)
 
-The notebook runner injects slim `base_instructions` in the generated Codex model catalog that point agents at `AGENTS.md` and the wiki before exploring files.
+The notebook runner injects slim `base_instructions` in the generated Codex model catalog that point production agents at `workspace/docs/agent-guide.md` and the curated MCP tools.
 
 The production single-user image (`docker/singleuser/Dockerfile`) seeds `workspace/` into `/home/jovyan/work` and does not copy deployment or client source into the user file browser. Local development uses the full repository checkout with agent wiki under `docs/llm/`.
 
@@ -145,7 +146,7 @@ The production single-user image (`docker/singleuser/Dockerfile`) seeds `workspa
 @Codex explain the structure of this workspace.
 @Codex inspect workspace/Welcome.ipynb and summarize what a new MIP user should do first.
 @Codex explain how mip.Client.from_env() gets configuration.
-@Codex create a new notebook named mcp_probe.ipynb with one markdown cell that says MCP OK.
+@Codex create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK.
 ```
 
 The current prototype is considered successful if the Jupyter AI chat UI opens, Codex appears after the runtime agent setup, Codex can answer against an existing notebook or workspace file, and Codex can use the Jupyter MCP shell bridge to create or edit a notebook without any credentials committed to the repository.
@@ -158,7 +159,7 @@ Use these prompts to verify that Codex follows the wiki instead of grepping the 
 |--------|----------------|
 | `@Codex explain how mip.Client.from_env() gets configuration` | `docs/llm/wiki/05-env-and-backend.md` or `python-client/mip/client.py` |
 | `@Codex summarize what a new MIP user should do first` | `docs/llm/wiki/01-onboarding.md` and optionally `workspace/Welcome.ipynb` |
-| `@Codex create a new notebook named mcp_probe.ipynb with one markdown cell that says MCP OK` | MCP CLI only per `docs/llm/wiki/04-jupyter-mcp.md` |
+| `@Codex create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK` | MCP CLI only per `docs/llm/wiki/04-jupyter-mcp.md` |
 
 ## Production Notes
 

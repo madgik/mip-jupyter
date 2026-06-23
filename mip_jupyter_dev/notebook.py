@@ -14,6 +14,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from .jupyter_mcp_tools import SAFE_JUPYTER_MCP_TOOLS
+
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:8080/services"
 DEFAULT_TOKEN = "dev"
@@ -27,15 +29,6 @@ DEFAULT_CODEX_PROVIDER = "north_vllm"
 DEFAULT_CODEX_CONTEXT_WINDOW = 131072
 DEFAULT_CODEX_AUTO_COMPACT_LIMIT = 100000
 DEFAULT_CODEX_PERSONA_ID = "jupyter-ai-personas::jupyter_ai_acp_client::CodexAcpPersona"
-SAFE_JUPYTER_MCP_TOOLS = [
-    "mip_jupyter_dev.jupyter_mcp_tools:create_notebook",
-    "mip_jupyter_dev.jupyter_mcp_tools:add_markdown_cell",
-    "mip_jupyter_dev.jupyter_mcp_tools:add_code_cell",
-    "mip_jupyter_dev.jupyter_mcp_tools:edit_cell_by_index",
-    "mip_jupyter_dev.jupyter_mcp_tools:read_notebook_cells",
-    "mip_jupyter_dev.jupyter_mcp_tools:open_file",
-    "mip_jupyter_dev.jupyter_mcp_tools:run_all_cells",
-]
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -160,13 +153,15 @@ def _write_codex_model_catalog(path: Path, args: argparse.Namespace) -> None:
                 "availability_nux": None,
                 "upgrade": None,
                 "base_instructions": (
-                    "You are Codex in JupyterLab via Jupyter AI. Before exploring the repo, "
-                    "read AGENTS.md and docs/llm/INDEX.md; follow the task routing table. "
-                    "Do not grep or list the full tree on startup. Keep edits focused. "
-                    "For notebook create/edit use python -m mip_jupyter_dev.jupyter_mcp_cli "
-                    "(JUPYTER_MCP_URL is set); see docs/llm/wiki/04-jupyter-mcp.md. "
-                    "After edits run read-notebook to verify. Do not ask the user to paste "
-                    "notebook cells manually."
+                    "You are Codex in JupyterLab for MIP analysis users. Start by reading "
+                    "workspace/docs/agent-guide.md with agent_read_guide, then choose the "
+                    "smallest relevant tool. Search workspace docs before opening notebooks. "
+                    "Use notebook_outline before notebook_read_cell, keep notebook work under "
+                    "scratch/ unless the user explicitly names another path, and use "
+                    "mip.Client.from_env() through the curated MIP metadata tools. Never call "
+                    "Exaflow directly, dump tokens, or use broad filesystem reads. If native "
+                    "MCP is unavailable, call the same tools through "
+                    "python -m mip_jupyter_dev.jupyter_mcp_cli; JUPYTER_MCP_URL is set."
                 ),
                 "supports_reasoning_summaries": False,
                 "default_reasoning_summary": "none",
