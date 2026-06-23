@@ -75,7 +75,19 @@ PY
 JUPYTER_HOST="${JUPYTER_HOST:-127.0.0.1}"
 JUPYTER_PORT="${JUPYTER_PORT:-8888}"
 JUPYTER_TOKEN="${JUPYTER_TOKEN:-dev}"
-MIP_NOTEBOOK="${MIP_NOTEBOOK:-workspace/examples/feres_analysis.ipynb}"
+if [[ -n "${MIP_JUPYTER_ROOT:-}" ]]; then
+  JUPYTER_ROOT="$(cd "${MIP_JUPYTER_ROOT}" && pwd)"
+else
+  JUPYTER_ROOT="${PWD}"
+fi
+WORKSPACE_ROOT="$(cd "${PWD}/workspace" && pwd)"
+if [[ -n "${MIP_NOTEBOOK:-}" ]]; then
+  MIP_NOTEBOOK="${MIP_NOTEBOOK}"
+elif [[ "${JUPYTER_ROOT}" == "${WORKSPACE_ROOT}" ]]; then
+  MIP_NOTEBOOK="Welcome.ipynb"
+else
+  MIP_NOTEBOOK="workspace/examples/feres_analysis.ipynb"
+fi
 PLATFORM_BACKEND_URL="${PLATFORM_BACKEND_URL:-http://127.0.0.1:8080/services}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.5}"
 
@@ -122,13 +134,14 @@ unset CODEX_HOME
 echo "Starting mip-jupyter with normal Codex (${CODEX_MODEL})"
 echo "Using Codex auth and approval settings from your normal ~/.codex login/config"
 echo "Jupyter MCP port: ${JUPYTER_MCP_PORT}"
+echo "Jupyter root: ${JUPYTER_ROOT}"
 echo "Jupyter URL: http://${JUPYTER_HOST}:${JUPYTER_PORT}/lab/tree/${MIP_NOTEBOOK}?token=${JUPYTER_TOKEN}"
 
 uv run python -m jupyterlab --no-browser \
   --ServerApp.ip="${JUPYTER_HOST}" \
   --ServerApp.port="${JUPYTER_PORT}" \
   --ServerApp.token="${JUPYTER_TOKEN}" \
-  --ServerApp.root_dir="${PWD}" \
+  --ServerApp.root_dir="${JUPYTER_ROOT}" \
   --ServerApp.default_url="/lab/tree/${MIP_NOTEBOOK}" \
   --config "${JUPYTER_CONFIG}" \
   "$@"
