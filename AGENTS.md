@@ -1,46 +1,55 @@
-# Repository Guidelines
+# MIP Jupyter — Agent Bootstrap
 
-## Project Structure & Module Organization
-This repository has two deliverables: container images and a Python client.
-- `Dockerfile.jupyter` builds the single-user notebook image and ships `Welcome.ipynb` and `feres_analysis.ipynb`.
-- `Dockerfile.jupyterhub` builds the hub-side image with JupyterLab, OAuth helpers, and the local client package.
-- `Welcome.ipynb` is the getting-started notebook copied to `/opt/portal-notebooks/Welcome.ipynb`.
-- `feres_analysis.ipynb` is the Feres stroke territory example notebook.
-- `python-client/mip/` contains the library modules (`client.py`, `catalog.py`, `datamodel.py`, `analysis.py`, `pipeline.py`, `filters.py`, `preprocessing.py`, `algorithms.py`, `results.py`, `sklearn.py`, `transport.py`, `exceptions.py`).
-- `python-client/tests/` holds unit tests; `python-client/conftest.py` keeps imports stable during test discovery.
-- `python-client/pyproject.toml` defines Poetry package metadata and dependencies.
-- `expected_library.md` documents the public API contract exercised by `Welcome.ipynb`.
-Do not hand-edit generated artifacts in `build/`, `*.egg-info/`, or `__pycache__/`.
+You are a Jupyter AI agent working in **mip-jupyter**: JupyterLab plus the `mip` Python client for federated analysis via platform-backend.
 
-## Build, Test, and Development Commands
-- `cd python-client && poetry install`: install the client and dev dependencies with Poetry.
-- `python3 -m pip install -e ./python-client`: install the client in editable mode with pip.
-- `cd python-client && python3 -m unittest discover -s tests -p "test_*.py"`: run the main unit test suite.
-- `python3 -m pytest python-client/tests -q`: run tests with pytest (supported via `conftest.py`).
-- `python3 python-client/verify_script.py`: quick mocked smoke check of catalog and pipeline flows.
-- `client.catalog().data_model("code", version="x.y")` discovers data models before creating an `AnalysisSet`.
-- `docker build --build-arg JUPYTER_SCIPY_IMAGE=jupyter/scipy-notebook@sha256:<digest> -f Dockerfile.jupyter -t mip-jupyter:dev .`: build notebook image reproducibly.
-- `docker build -f Dockerfile.jupyterhub -t mip-jupyterhub:dev .`: build hub image.
+## Scope
 
-## Coding Style & Naming Conventions
-Use Python 3 with PEP 8 defaults: 4-space indentation, readable line lengths, and docstrings for public APIs.
-- Modules/functions/variables: `snake_case`
-- Classes: `PascalCase`
-- Environment variables: `UPPER_SNAKE_CASE`
-Prefer explicit error messages and deterministic behavior (no hidden network side effects in tests).
+- Notebooks use `mip` → platform-backend (`/services`) only. Never call Exaflow directly.
+- Stay in this repository. Do not read sibling repos or umbrella workspace docs.
 
-## Testing Guidelines
-Tests are `unittest`-based and rely on `unittest.mock` to patch `requests.Session` methods.
-- Name files `test_*.py` and test methods `test_<behavior>`.
-- Keep tests isolated from real services; no live HTTP calls.
-- Add a regression test with every behavior fix in `mip`.
+## Startup (required)
 
-## Commit & Pull Request Guidelines
-Local `.git` history is not included in this checkout, so follow a consistent convention:
-- Use concise, imperative commit subjects (optionally Conventional Commits), e.g. `fix(client): handle expired token refresh`.
-- Keep commits focused on one logical change.
-- PRs should include: what changed, why, test commands run, and any config/env impacts.
-- For notebook or UX-facing changes, include screenshots or brief output snippets.
+1. Read [docs/llm/INDEX.md](docs/llm/INDEX.md)
+2. Open the **one** wiki page for the user's task (routing table below)
+3. Open source files or notebooks only when that page says so
 
-## Security & Configuration Tips
-Never commit real credentials or tokens. Use environment variables such as `PLATFORM_BACKEND_URL`, `PLATFORM_TOKEN`, `MIP_TOKEN`, `PLATFORM_BACKEND_TIMEOUT`, and `PLATFORM_BACKEND_ALLOW_REDIRECTS` for runtime configuration.
+## Routing
+
+| Task | Wiki page |
+|------|-----------|
+| New MIP user, first steps | [docs/llm/wiki/01-onboarding.md](docs/llm/wiki/01-onboarding.md) |
+| Build or run an analysis pipeline | [docs/llm/wiki/02-analysis-workflow.md](docs/llm/wiki/02-analysis-workflow.md) |
+| MIP Python API lookup | [docs/llm/wiki/03-mip-client-api.md](docs/llm/wiki/03-mip-client-api.md) |
+| Create or edit notebooks via AI | [docs/llm/wiki/04-jupyter-mcp.md](docs/llm/wiki/04-jupyter-mcp.md) |
+| Env vars, `Client.from_env()` | [docs/llm/wiki/05-env-and-backend.md](docs/llm/wiki/05-env-and-backend.md) |
+| Stroke pathology notebook | [docs/llm/wiki/recipes/stroke-analysis.md](docs/llm/wiki/recipes/stroke-analysis.md) |
+| Client dev, tests, commits | [docs/llm/wiki/dev-contributor.md](docs/llm/wiki/dev-contributor.md) |
+
+## Key files
+
+| File | Purpose |
+|------|---------|
+| `workspace/Welcome.ipynb` | Getting-started runnable notebook |
+| `workspace/examples/feres_analysis.ipynb` | Stroke territory analysis example |
+| `expected_library.md` | Full API contract (read only when cheat sheet is insufficient) |
+
+## Tools
+
+Notebook create/edit: `python -m mip_jupyter_dev.jupyter_mcp_cli` (`JUPYTER_MCP_URL` is set). See `04-jupyter-mcp.md` for commands.
+
+## Guardrails
+
+- No full-repo `find`, `grep`, or directory listing on startup
+- Do not read `expected_library.md` unless `03-mip-client-api.md` is insufficient
+- Do not read `.venv/`, `.ipynb_checkpoints/`, `.playwright-cli/`, or `uv.lock`
+- Never log or commit tokens (`MIP_TOKEN`, `PLATFORM_TOKEN`)
+
+## Repository layout (brief)
+
+- `workspace/` — production user-facing notebooks and docs
+- `python-client/mip/` — client library source
+- `docker/` — single-user and Hub image definitions
+- `mip_jupyter_dev/` — local JupyterLab runner and MCP bridge
+- `docs/llm/` — task-scoped agent wiki
+
+For build, test, and PR rules see [docs/llm/wiki/dev-contributor.md](docs/llm/wiki/dev-contributor.md).

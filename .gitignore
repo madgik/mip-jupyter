@@ -12,6 +12,7 @@ htmlcov/
 .tox/
 .nox/
 .hypothesis/
+.codegraph
 
 # Virtual environments
 .venv/
@@ -51,3 +52,4 @@ Thumbs.db
 
 # Cursor / local tooling
 .cursor/
+.aider*
