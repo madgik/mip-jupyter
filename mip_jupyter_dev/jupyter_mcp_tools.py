@@ -12,7 +12,7 @@ from typing import Any
 from typing import Literal
 
 
-GUIDE_RELATIVE_PATH = Path("docs") / "agent-guide.md"
+GUIDE_RELATIVE_PATH = Path("llm") / "wiki" / "00-agent-workspace.md"
 BLOCKED_PATH_PARTS = {".ipynb_checkpoints", ".venv", ".playwright-cli", "__pycache__"}
 MAX_DOC_RESULTS = 10
 MAX_DOC_SNIPPET_CHARS = 600
@@ -243,6 +243,33 @@ def _new_cell(content: str, cell_type: Literal["code", "markdown", "raw"]) -> di
     return cell
 
 
+def _agent_docs_root() -> Path | None:
+    configured = os.getenv("MIP_AGENT_DOCS")
+    if configured:
+        path = Path(configured).expanduser()
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        resolved = path.resolve()
+        if resolved.is_dir():
+            return resolved
+    repo = Path(__file__).resolve().parents[1]
+    if (repo / "docs" / "llm").is_dir():
+        return repo
+    return None
+
+
+def _agent_guide_path() -> Path | None:
+    candidates: list[Path] = []
+    agent_root = _agent_docs_root()
+    if agent_root is not None:
+        candidates.append(agent_root / GUIDE_RELATIVE_PATH)
+        candidates.append(agent_root / "docs" / GUIDE_RELATIVE_PATH)
+    for path in candidates:
+        if path.is_file():
+            return path
+    return None
+
+
 def _doc_files() -> list[Path]:
     docs_root = _workspace_root() / "docs"
     if not docs_root.is_dir():
@@ -251,7 +278,10 @@ def _doc_files() -> list[Path]:
     for path in sorted(docs_root.rglob("*.md")):
         if any(part in BLOCKED_PATH_PARTS for part in path.parts):
             continue
-        _require_within_workspace(path)
+        try:
+            path.relative_to(docs_root)
+        except ValueError:
+            continue
         files.append(path)
     return files
 
@@ -300,14 +330,14 @@ def _section_matches(text: str, topic: str) -> list[str]:
 
 
 async def agent_read_guide(topic: str | None = None) -> dict[str, Any]:
-    """Read the workspace-visible production guide, optionally narrowed by topic."""
+    """Read the agent workspace guide, optionally narrowed by topic."""
 
-    guide_path = _workspace_root() / GUIDE_RELATIVE_PATH
-    if not guide_path.is_file():
+    guide_path = _agent_guide_path()
+    if guide_path is None:
         return {
             "ok": False,
             "path": GUIDE_RELATIVE_PATH.as_posix(),
-            "error": "Production agent guide is missing.",
+            "error": "Agent workspace guide is missing.",
         }
     text = guide_path.read_text(encoding="utf-8")
     if topic:
@@ -315,9 +345,10 @@ async def agent_read_guide(topic: str | None = None) -> dict[str, Any]:
         content = "\n\n".join(matches) if matches else ""
     else:
         content = text
+    display_path = GUIDE_RELATIVE_PATH.as_posix()
     return {
         "ok": True,
-        "path": GUIDE_RELATIVE_PATH.as_posix(),
+        "path": display_path,
         "topic": topic,
         "content": _truncate(content, 8000),
         "truncated": len(content) > 8000,

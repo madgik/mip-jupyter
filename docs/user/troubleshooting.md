@@ -24,7 +24,9 @@ Restart the kernel after environment changes. If problems persist, restart the n
 - Use `scratch/` for your own notebooks and experiments.
 - Canonical examples under `examples/` are provided as templates; copy them into `scratch/` before editing if you want to keep the originals.
 
+See [Workspace guide](workspace-guide.md) for details.
+
 ## Getting help
 
-- Re-read `mip-client-quickstart.md` and `Welcome.ipynb`.
+- Re-read [Quickstart](quickstart.md) and `Welcome.ipynb`.
 - Ask your platform administrator for backend URL, token, and data-model access issues.

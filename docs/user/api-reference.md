@@ -28,7 +28,10 @@ dm.variables.search("text")
 F(diagnosis).isin(["AD", "CN"])
 F(mmse).between(20, 26)
 expr1 | expr2
+~F(x).isin([...])  # rewrites to not_in
 ```
+
+String-match operators (`contains`, `starts_with`, `ends_with`) may not be accepted by the backend validator.
 
 ## Preprocessing
 
@@ -37,6 +40,8 @@ MissingValuesHandler(strategies={age: "median", mmse: "mean"})
 OutlierWinsorizer(strategies={mmse: "iqr"}, tails={mmse: "both"}, folds={mmse: 1.5})
 CategoricalColumnCreator(code="cohort", rules={...}, default_enumeration="other")
 ```
+
+Use `creator.variable` for the derived column in downstream algorithms.
 
 ## Pipeline algorithms
 
@@ -61,5 +66,6 @@ logreg.to_sklearn()  # logistic regression only
 
 ```python
 client.algorithms().list()
+client.algorithms().search("logistic")
 client.experiments().list()
 ```

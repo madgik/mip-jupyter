@@ -17,6 +17,7 @@ You are a Jupyter AI agent working in **mip-jupyter**: JupyterLab plus the `mip`
 
 | Task | Wiki page |
 |------|-----------|
+| Agent workspace rules, MCP workflow | [docs/llm/wiki/00-agent-workspace.md](docs/llm/wiki/00-agent-workspace.md) |
 | New MIP user, first steps | [docs/llm/wiki/01-onboarding.md](docs/llm/wiki/01-onboarding.md) |
 | Build or run an analysis pipeline | [docs/llm/wiki/02-analysis-workflow.md](docs/llm/wiki/02-analysis-workflow.md) |
 | MIP Python API lookup | [docs/llm/wiki/03-mip-client-api.md](docs/llm/wiki/03-mip-client-api.md) |
@@ -31,6 +32,7 @@ You are a Jupyter AI agent working in **mip-jupyter**: JupyterLab plus the `mip`
 |------|---------|
 | `workspace/Welcome.ipynb` | Getting-started runnable notebook |
 | `workspace/examples/feres_analysis.ipynb` | Stroke territory analysis example |
+| `docs/user/` | User-facing docs (shipped to workspace `docs/`; quote to users, not agent startup) |
 | `expected_library.md` | Full API contract (read only when cheat sheet is insufficient) |
 
 ## Tools
@@ -46,7 +48,8 @@ Notebook create/edit: `python -m mip_jupyter_dev.jupyter_mcp_cli` (`JUPYTER_MCP_
 
 ## Repository layout (brief)
 
-- `workspace/` — production user-facing notebooks and docs
+- `workspace/` — production user-facing notebooks (docs copied from `docs/user/` at image build)
+- `docs/user/` — canonical user documentation source
 - `python-client/mip/` — client library source
 - `docker/` — single-user and Hub image definitions
 - `mip_jupyter_dev/` — local JupyterLab runner and MCP bridge

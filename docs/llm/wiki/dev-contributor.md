@@ -8,13 +8,20 @@
 
 - `workspace/Welcome.ipynb` — local getting-started notebook
 - `workspace/examples/feres_analysis.ipynb` — Feres stroke territory example
+- `docs/user/` — canonical user documentation (shipped to workspace `docs/`)
 - `python-client/mip/` — library modules (`client.py`, `catalog.py`, `pipeline.py`, etc.)
 - `python-client/tests/` — unit tests; `conftest.py` keeps imports stable
 - `expected_library.md` — public API contract exercised by `workspace/Welcome.ipynb`
 
 Do not hand-edit generated artifacts in `build/`, `*.egg-info/`, or `__pycache__/`.
 
-When the public API changes, update `expected_library.md` and the relevant `docs/llm/wiki/` pages.
+When the public API changes, update these together:
+
+- `expected_library.md`
+- `docs/user/api-reference.md`
+- `docs/llm/wiki/03-mip-client-api.md`
+
+Notebook outputs in `workspace/Welcome.ipynb` should be re-run after API changes. Prefer committed outputs for onboarding notebooks (documented convention).
 
 ## Build, test, and development
 

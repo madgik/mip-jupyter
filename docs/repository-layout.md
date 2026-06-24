@@ -3,54 +3,51 @@
 ```text
 mip-jupyter/
   README.md
+  AGENTS.md                 # Agent bootstrap (Cursor, Codex in IDE)
 
   docker/
     singleuser/
-      Dockerfile          # Production single-user Jupyter image
-      entrypoint.sh       # Seeds workspace and starts JupyterLab
+      Dockerfile            # Production single-user Jupyter image
+      entrypoint.sh
     hub/
-      Dockerfile          # JupyterHub image
+      Dockerfile            # JupyterHub image
       jupyterhub_config.py
 
-  deploy/
-    local/
-      docker-compose.yml
-      .env.example
-    production/
-      README.md
-
   python-client/
-    mip/                  # Installed as package in production images
+    mip/                    # Installed as package in production images
     tests/
     pyproject.toml
 
-  workspace/              # Template copied into /home/jovyan/work in production
-    Welcome.ipynb
+  workspace/                # Notebooks seeded into /home/jovyan/work
+    Welcome.ipynb           # Default landing / onboarding
     examples/
       feres_analysis.ipynb
-    docs/
-      mip-client-quickstart.md
-      mip-client-api.md
-      troubleshooting.md
     scratch/
 
   docs/
+    user/                   # Canonical user docs → copied to workspace/docs/ in image
+      README.md
+      quickstart.md
+      api-reference.md
+      troubleshooting.md
+      workspace-guide.md
+    llm/                    # Agent wiki (shipped to /opt/mip-agent-docs/, not user-visible)
     architecture.md
     repository-layout.md
     release-process.md
-    llm/                  # Agent onboarding wiki (developers)
+    operators.md
 
-  mip_jupyter_dev/        # Local dev runner (not in production workspace)
-  expected_library.md     # API contract for client development
+  mip_jupyter_dev/          # Local dev runner (not in production workspace)
+  expected_library.md       # API contract for client development
 ```
 
 ## What production users see
 
 ```text
 /home/jovyan/work/
-  Welcome.ipynb
+  Welcome.ipynb             # Opens by default
   examples/
-  docs/
+  docs/                     # from docs/user/
   scratch/
 ```
 
@@ -58,8 +55,13 @@ mip-jupyter/
 
 - `python-client/` source tree
 - Dockerfiles and Hub configuration
+- `docs/llm/` agent wiki (`/opt/mip-agent-docs/`)
 - `mip_jupyter_dev/` tooling
-- Repository CI and deployment files
+- Repository CI files
+
+## Deployment
+
+Orchestration and environment configuration: **`mip/deployment`**. See [`operators.md`](operators.md).
 
 ## Legacy root paths
 

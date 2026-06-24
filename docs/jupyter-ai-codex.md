@@ -125,14 +125,14 @@ curl http://100.92.46.71:8001/v1/responses \
 
 Jupyter AI Codex is steered by a layered wiki instead of ad-hoc repo exploration:
 
-- [`workspace/docs/agent-guide.md`](../workspace/docs/agent-guide.md) — production workspace guide for Jupyter agents
-- [`AGENTS.md`](../AGENTS.md) — repository bootstrap entry point for development work
+- **Production Codex:** `agent_read_guide` reads `docs/llm/wiki/00-agent-workspace.md` from `/opt/mip-agent-docs/`; `agent_search_docs` searches user docs in workspace `docs/`.
+- [`AGENTS.md`](../AGENTS.md) — repository bootstrap entry point for Cursor and IDE agents
 - [`docs/llm/INDEX.md`](../docs/llm/INDEX.md) — wiki map and task routing table
-- [`docs/llm/wiki/`](../docs/llm/wiki/) — task-scoped pages (onboarding, workflow, API cheat sheet, MCP, env)
+- [`docs/user/`](../docs/user/) — canonical user documentation (shipped to workspace `docs/`)
 
-The notebook runner injects slim `base_instructions` in the generated Codex model catalog that point production agents at `workspace/docs/agent-guide.md` and the curated MCP tools.
+The notebook runner injects slim `base_instructions` in the generated Codex model catalog that point production agents at `agent_read_guide` and the curated MCP tools.
 
-The production single-user image (`docker/singleuser/Dockerfile`) seeds `workspace/` into `/home/jovyan/work` and does not copy deployment or client source into the user file browser. Local development uses the full repository checkout with agent wiki under `docs/llm/`.
+The production single-user image seeds `workspace/` and `docs/user/` into `/home/jovyan/work`, bundles agent wiki at `/opt/mip-agent-docs/`, and does not copy client source into the user file browser.
 
 ## Verify Jupyter AI and Codex
 

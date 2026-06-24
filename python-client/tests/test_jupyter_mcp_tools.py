@@ -99,15 +99,23 @@ class TestJupyterMcpTools(unittest.TestCase):
     def test_agent_docs_search_is_bounded_to_workspace_docs(self):
         tmp, workspace = self._workspace()
         self.addCleanup(tmp.cleanup)
-        (workspace / "docs" / "agent-guide.md").write_text(
-            "# Agent Guide\n\nUse scratch notebooks for NIHSS analysis.", encoding="utf-8"
+        repo = workspace.parent
+        agent_docs = repo / "agent-docs"
+        (agent_docs / "llm" / "wiki").mkdir(parents=True)
+        (agent_docs / "llm" / "wiki" / "00-agent-workspace.md").write_text(
+            "# Agent Workspace Guide\n\n## Scratch\n\nUse scratch notebooks for NIHSS analysis.",
+            encoding="utf-8",
         )
-        (workspace / "docs" / "api.md").write_text(
-            "# API\n\nNIHSS variables are discovered through metadata summaries.", encoding="utf-8"
+        (workspace / "docs" / "quickstart.md").write_text(
+            "# Quickstart\n\nNIHSS variables are discovered through metadata summaries.",
+            encoding="utf-8",
         )
         (workspace.parent / "outside.md").write_text("NIHSS SECRET_OUTSIDE", encoding="utf-8")
 
-        with patch.dict(os.environ, {"MIP_JUPYTER_ROOT": str(workspace)}):
+        with patch.dict(
+            os.environ,
+            {"MIP_JUPYTER_ROOT": str(workspace), "MIP_AGENT_DOCS": str(agent_docs)},
+        ):
             guide = run(tools.agent_read_guide(topic="scratch"))
             result = run(tools.agent_search_docs("NIHSS", limit=1))
 

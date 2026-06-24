@@ -26,10 +26,16 @@ Do not read unless a wiki page explicitly requires it:
 - `python-client/tests/` (unless doing client development)
 - `build/`, `*.egg-info/`, `__pycache__/`
 
+## User docs vs agent wiki
+
+- **Agent wiki** (`docs/llm/`) — your startup corpus. Read one page at a time from the routing table below.
+- **User docs** (`docs/user/`) — for humans in Jupyter at `docs/` in the workspace. Do not read on startup unless you are helping a user find or quote user-facing help (use `agent_search_docs` in production Codex).
+
 ## Routing table
 
 | User intent | Wiki page | Optional notebook |
 |-------------|-----------|-------------------|
+| Agent workspace rules, MCP workflow | [wiki/00-agent-workspace.md](wiki/00-agent-workspace.md) | — |
 | New MIP user, first steps | [wiki/01-onboarding.md](wiki/01-onboarding.md) | `workspace/Welcome.ipynb` |
 | Build or run an analysis pipeline | [wiki/02-analysis-workflow.md](wiki/02-analysis-workflow.md) | `workspace/examples/feres_analysis.ipynb` |
 | MIP Python API lookup | [wiki/03-mip-client-api.md](wiki/03-mip-client-api.md) | — |

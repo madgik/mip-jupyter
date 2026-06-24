@@ -33,6 +33,9 @@ pip-wheel-metadata/
 # Notebook checkpoints
 .ipynb_checkpoints/
 
+# Dev-synced copy of docs/user/ (see mip_jupyter_dev/notebook.py)
+workspace/docs/
+
 # Local env and token files
 .env
 .env.*

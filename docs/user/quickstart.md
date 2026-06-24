@@ -55,5 +55,5 @@ result.summary()
 
 - Open `Welcome.ipynb` for a guided walkthrough.
 - See `examples/feres_analysis.ipynb` for a stroke-territory analysis.
-- See `mip-client-api.md` for the full API cheat sheet.
+- See [API reference](api-reference.md) for the full cheat sheet.
 - Save your own notebooks under `scratch/`.
