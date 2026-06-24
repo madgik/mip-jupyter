@@ -6,6 +6,7 @@ from typing import Any
 from typing import Mapping
 
 from .datasets import DatasetCollection
+from .display import HelpText
 from .variables import VariableCollection
 
 
@@ -54,7 +55,7 @@ class DataModel:
             ],
         )
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("DataModel")

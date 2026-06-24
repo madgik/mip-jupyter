@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .exceptions import UnsupportedOperationError
+from .display import HelpText
 from .sklearn import feature_schema_from_logistic_result
 from .sklearn import logistic_regression_to_sklearn
 
@@ -32,7 +33,7 @@ class Result:
             [".summary()", ".raw", ".payload", ".help()"],
         )
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("Result")
@@ -76,7 +77,7 @@ class ModelResult(Result):
             raise UnsupportedOperationError("Only logistic regression results can be exported to sklearn.")
         return logistic_regression_to_sklearn(self.raw, positive_class=self.positive_class)
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("ModelResult")

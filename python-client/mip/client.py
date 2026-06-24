@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from .exceptions import MipConfigurationError
+from .display import HelpText
 from .transport import Transport
 
 
@@ -62,7 +63,7 @@ class Client:
     def experiments(self):
         return ExperimentRegistry(self._transport)
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("Client")

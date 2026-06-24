@@ -6,6 +6,7 @@ from typing import Any
 from typing import Sequence
 
 from .exceptions import MipConfigurationError
+from .display import HelpText
 from .request_builder import build_inputdata
 from .request_builder import code as _code
 from .results import Result
@@ -68,7 +69,7 @@ class AnalysisSet:
             [".summary()", ".explain()", ".help()"],
         )
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("AnalysisSet")

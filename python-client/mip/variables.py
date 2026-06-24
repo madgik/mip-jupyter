@@ -6,6 +6,7 @@ from typing import Any
 from typing import Iterable
 from typing import Mapping
 
+from .display import HelpText
 
 class Variable:
     """One backend data-model variable."""
@@ -32,7 +33,7 @@ class Variable:
             [".summary()", ".metadata()", ".categories()", ".help()"],
         )
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("Variable")
@@ -178,7 +179,7 @@ class VariableCollection:
 
         return to_frame(self._items)
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("VariableCollection")

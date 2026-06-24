@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from typing import Mapping
 
+from .display import HelpText
 
 class Algorithm:
     """One algorithm specification returned by the backend."""
@@ -82,7 +83,7 @@ class AlgorithmRegistry:
 
         return to_frame(self.list())
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("AlgorithmRegistry")

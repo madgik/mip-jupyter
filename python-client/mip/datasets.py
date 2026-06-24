@@ -8,6 +8,7 @@ from typing import Mapping
 
 from .variables import Variable
 from .variables import VariableCollection
+from .display import HelpText
 
 
 def _variable_code(variable: Any) -> str:
@@ -39,7 +40,7 @@ class Dataset:
             [".summary()", ".metadata()", ".variables()", ".help()"],
         )
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("Dataset")
@@ -111,7 +112,7 @@ class DatasetCollection:
 
         return to_frame(self._items)
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("DatasetCollection")

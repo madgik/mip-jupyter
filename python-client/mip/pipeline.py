@@ -6,6 +6,7 @@ from typing import Any
 from typing import Sequence
 
 from .exceptions import MipBackendError
+from .display import HelpText
 from .request_builder import build_experiment_payload
 from .request_builder import code as _code
 from .results import ModelResult
@@ -163,7 +164,7 @@ class Pipeline:
             ],
         )
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("Pipeline")

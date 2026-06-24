@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .datamodel import DataModel
+from .display import HelpText
 from .metadata_tree import MetadataTree
 from .metadata_tree import render_catalog_tree
 
@@ -60,7 +61,7 @@ class Catalog:
             results.extend(model.datasets.search(text))
         return results
 
-    def help(self) -> str:
+    def help(self) -> HelpText:
         from .display import show_help
 
         return show_help("Catalog")
