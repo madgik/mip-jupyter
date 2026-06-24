@@ -7,7 +7,7 @@ from typing import Sequence
 
 from .exceptions import MipConfigurationError
 from .display import HelpText
-from .labels import build_code_to_label_lookup
+from .labels import build_explain_lookup
 from .labels import build_field_enumeration_lookups
 from .labels import public_label
 from .labels import sanitize_inputdata
@@ -29,9 +29,12 @@ class AnalysisSet:
         return _data_model_name(self.data_model)
 
     def _lookup(self) -> dict[str, str]:
-        lookup = build_code_to_label_lookup(self.variables, self.datasets, [self.data_model])
-        lookup[self.data_model_name()] = public_label(self.data_model)
-        return lookup
+        return build_explain_lookup(
+            data_model=self.data_model,
+            datasets=self.datasets,
+            selected_variables=self.variables,
+            data_model_name=self.data_model_name(),
+        )
 
     def _enum_lookups(self) -> dict[str, dict[str, str]]:
         dm_variables = getattr(self.data_model, "variables", None)

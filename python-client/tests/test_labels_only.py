@@ -96,6 +96,22 @@ class TestLabelsOnly(unittest.TestCase):
         self.assertNotIn('"M"', preview)
         self.assertNotIn('"F"', preview)
 
+    def test_pipeline_explain_relabels_filter_only_variables(self):
+        analysis_set = AnalysisSet(
+            data_model=self.dm,
+            datasets=[self.adni],
+            variables=[self.age],
+        )
+        pipeline = Pipeline(
+            analysis_set=analysis_set,
+            filters=F(self.sex).isin(["Male"]),
+        )
+        explained = pipeline.explain()
+        self.assertEqual(explained["filters"]["field"], "Sex")
+        self.assertEqual(explained["filters"]["id"], "Sex")
+        self.assertEqual(explained["filters"]["value"], ["Male"])
+        self.assertNotIn('"sex"', json.dumps(explained))
+
     def test_tree_output_uses_labels_only(self):
         tree = str(self.dm.tree(include_variables=True))
         self.assertIn("Age", tree)

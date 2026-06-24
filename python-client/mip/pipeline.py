@@ -7,7 +7,7 @@ from typing import Sequence
 
 from .exceptions import MipBackendError
 from .display import HelpText
-from .labels import build_code_to_label_lookup
+from .labels import build_explain_lookup
 from .labels import build_field_enumeration_lookups
 from .labels import public_label
 from .labels import sanitize_explain_dict
@@ -221,13 +221,12 @@ class Pipeline:
         return result_class(raw=raw, payload=response, result_type=result_type or name, **kwargs)
 
     def _lookup(self) -> dict[str, str]:
-        lookup = build_code_to_label_lookup(
-            self.analysis_set.variables,
-            self.analysis_set.datasets,
-            [self.analysis_set.data_model],
+        return build_explain_lookup(
+            data_model=self.analysis_set.data_model,
+            datasets=self.analysis_set.datasets,
+            selected_variables=self.analysis_set.variables,
+            data_model_name=self.analysis_set.data_model_name(),
         )
-        lookup[self.analysis_set.data_model_name()] = public_label(self.analysis_set.data_model)
-        return lookup
 
     def _enum_lookups(self) -> dict[str, dict[str, str]]:
         dm_variables = getattr(self.analysis_set.data_model, "variables", None)

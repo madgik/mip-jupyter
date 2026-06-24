@@ -95,6 +95,21 @@ def build_code_to_label_lookup(*collections: Iterable[Any]) -> dict[str, str]:
     return lookup
 
 
+def build_explain_lookup(
+    *,
+    data_model: Any,
+    datasets: Iterable[Any],
+    selected_variables: Iterable[Any],
+    data_model_name: str,
+) -> dict[str, str]:
+    """Label lookup for explain previews; includes full catalog variables when available."""
+    dm_variables = getattr(data_model, "variables", None)
+    variable_source = dm_variables if dm_variables is not None else selected_variables
+    lookup = build_code_to_label_lookup(variable_source, datasets, [data_model])
+    lookup[data_model_name] = public_label(data_model)
+    return lookup
+
+
 def _raw_enumerations(variable: Any) -> Any:
     data = getattr(variable, "_data", None)
     if isinstance(data, Mapping):
