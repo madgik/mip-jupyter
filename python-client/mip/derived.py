@@ -4,34 +4,35 @@ from __future__ import annotations
 
 from typing import Any
 
+from .labels import slug_from_label
+
 
 class DerivedVariable:
     """A categorical variable created by preprocessing, not from the catalog."""
 
     def __init__(
         self,
-        code: str,
-        label: str | None = None,
+        *,
+        label: str,
         enumerations: list[str] | None = None,
         created_by: str | None = None,
+        _code: str | None = None,
     ):
-        self.code = code
-        self.label = label or code
+        self.label = label
+        self._code = _code or slug_from_label(label)
         self._enumerations = list(enumerations or [])
         self.created_by = created_by
 
     def __repr__(self) -> str:
-        return f"<DerivedVariable(code={self.code!r})>"
+        return f"<DerivedVariable(label={self.label!r})>"
 
-    def metadata(self) -> dict[str, Any]:
+    def details(self) -> dict[str, Any]:
         return {
-            "code": self.code,
             "label": self.label,
-            "sql_type": "text",
-            "is_categorical": True,
-            "enumerations": {value: value for value in self._enumerations},
+            "categorical": True,
+            "numerical": False,
+            "categories": self.categories(),
             "derived": True,
-            "created_by": self.created_by,
         }
 
     def is_numerical(self) -> bool:
@@ -44,4 +45,4 @@ class DerivedVariable:
         return list(self._enumerations)
 
     def summary(self) -> dict[str, Any]:
-        return self.metadata()
+        return self.details()

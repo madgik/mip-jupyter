@@ -6,14 +6,17 @@ from typing import Any
 from typing import Mapping
 
 from .display import HelpText
+from .labels import normalize_label
+
 
 class Algorithm:
     """One algorithm specification returned by the backend."""
 
     def __init__(self, data: Mapping[str, Any]):
         self._data = dict(data or {})
-        self.name = self._data.get("name")
-        self.label = self._data.get("label") or self.name
+        self._name = self._data.get("name")
+        self.label = self._data.get("label") or self._name
+        self.description = self._data.get("desc") or self._data.get("description") or ""
         self.type = self._data.get("type")
 
     def spec(self, client=None) -> dict[str, Any]:
@@ -21,10 +24,9 @@ class Algorithm:
 
     def summary(self) -> dict[str, Any]:
         return {
-            "name": self.name,
             "label": self.label,
+            "description": self.description,
             "type": self.type,
-            "desc": self._data.get("desc"),
         }
 
 
@@ -43,15 +45,14 @@ class AlgorithmRegistry:
         return [Algorithm(item) for item in payload if isinstance(item, dict)]
 
     def search(self, text: str = "") -> list[Algorithm]:
-        needle = str(text or "").lower()
+        needle = normalize_label(text)
         if not needle:
             return self.list()
         return [
             item
             for item in self.list()
-            if needle in str(item.name or "").lower()
-            or needle in str(item.label or "").lower()
-            or needle in str(item.spec().get("desc") or "").lower()
+            if needle in normalize_label(item.label)
+            or needle in normalize_label(item.description)
         ]
 
     def preprocessing(self) -> list[Algorithm]:
@@ -71,7 +72,7 @@ class AlgorithmRegistry:
             kind = str(item.type or "").lower()
             if not any(needle in kind for needle in needles):
                 continue
-            key = item.name or id(item)
+            key = item._name or id(item)
             if key in seen:
                 continue
             seen.add(key)

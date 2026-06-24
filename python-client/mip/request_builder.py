@@ -7,10 +7,11 @@ from typing import Iterable
 from typing import Sequence
 
 from .derived import DerivedVariable
+from .labels import internal_code
 
 
 def code(value: Any) -> str:
-    return str(getattr(value, "code", value))
+    return internal_code(value)
 
 
 def is_derived_variable(value: Any) -> bool:
@@ -124,7 +125,7 @@ def build_inputdata(
 ) -> dict[str, Any]:
     filters_payload = None
     if filters is not None:
-        filters_payload = filters.explain() if hasattr(filters, "explain") else filters
+        filters_payload = filters.to_payload() if hasattr(filters, "to_payload") else filters
     return {
         "data_model": data_model_name,
         "datasets": [code(dataset) for dataset in datasets],

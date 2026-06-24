@@ -7,30 +7,35 @@ from typing import Iterable
 from typing import Mapping
 
 from .display import HelpText
+from .labels import enumeration_code_for_label
+from .labels import enumeration_labels
+from .labels import lookup_by_label
+from .labels import normalize_label
+
 
 class Variable:
     """One backend data-model variable."""
 
     def __init__(self, data: Mapping[str, Any]):
         self._data = dict(data or {})
-        self.code = self._data.get("code")
-        self.label = self._data.get("label") or self.code
+        self._code = self._data.get("code")
+        self.label = self._data.get("label") or self._code
 
     def __repr__(self) -> str:
-        return f"<Variable(code={self.code!r})>"
+        return f"<Variable(label={self.label!r})>"
 
     def _repr_html_(self) -> str:
         from .display import render_object_card
 
         return render_object_card(
-            f"Variable: {self.code}",
+            f"Variable: {self.label}",
             {
                 "label": self.label,
                 "type": self._data.get("type"),
                 "numerical": self.is_numerical(),
                 "categorical": self.is_categorical(),
             },
-            [".summary()", ".metadata()", ".categories()", ".help()"],
+            [".summary()", ".details()", ".categories()", ".help()"],
         )
 
     def help(self) -> HelpText:
@@ -38,8 +43,14 @@ class Variable:
 
         return show_help("Variable")
 
-    def metadata(self) -> dict[str, Any]:
-        return dict(self._data)
+    def details(self) -> dict[str, Any]:
+        return {
+            "label": self.label,
+            "type": self._data.get("type"),
+            "categorical": self.is_categorical(),
+            "numerical": self.is_numerical(),
+            "categories": self.categories(),
+        }
 
     def is_numerical(self) -> bool:
         kind = str(self._data.get("type") or self._data.get("sql_type") or "").lower()
@@ -61,17 +72,16 @@ class Variable:
         kind = str(self._data.get("type") or "").lower()
         return kind in {"nominal", "categorical", "ordinal", "text", "string", "boolean", "bool"}
 
-    def categories(self) -> list[Any]:
-        values = self._data.get("enumerations") or self._data.get("enums") or []
-        if isinstance(values, Mapping):
-            return list(values.keys())
-        if isinstance(values, (list, tuple)):
-            return list(values)
-        return []
+    def categories(self) -> list[str]:
+        raw = self._data.get("enumerations") or self._data.get("enums") or []
+        return enumeration_labels(raw)
+
+    def enumeration_code_for(self, value: Any) -> str | None:
+        raw = self._data.get("enumerations") or self._data.get("enums") or []
+        return enumeration_code_for_label(raw, value)
 
     def summary(self) -> dict[str, Any]:
         return {
-            "code": self.code,
             "label": self.label,
             "type": self._data.get("type"),
             "categorical": self.is_categorical(),
@@ -90,7 +100,7 @@ class VariableCollection:
         root_variables: Iterable[Mapping[str, Any]] | None = None,
     ):
         self._items = [item if isinstance(item, Variable) else Variable(item) for item in variables]
-        self._by_code = {item.code: item for item in self._items if item.code is not None}
+        self._by_code = {item._code: item for item in self._items if item._code is not None}
         self._groups = list(groups or [])
         self._root_variables = [dict(item) for item in (root_variables or []) if isinstance(item, Mapping)]
 
@@ -100,20 +110,21 @@ class VariableCollection:
     def __len__(self) -> int:
         return len(self._items)
 
-    def __getitem__(self, code: str) -> Variable:
-        try:
-            return self._by_code[code]
-        except KeyError as exc:
-            raise KeyError(f"Unknown variable: {code}") from exc
+    def __getitem__(self, label: str) -> Variable:
+        return lookup_by_label(self._items, label, kind="variable")
 
     def search(self, text: str = "") -> list[Variable]:
-        needle = str(text or "").lower()
+        needle = normalize_label(text)
         if not needle:
             return self.to_list()
+
+        def description(item: Variable) -> str:
+            return str(item._data.get("desc") or item._data.get("description") or "")
+
         return [
             item
             for item in self._items
-            if needle in str(item.code or "").lower() or needle in str(item.label or "").lower()
+            if needle in normalize_label(item.label) or needle in normalize_label(description(item))
         ]
 
     def numerical(self) -> list[Variable]:
@@ -145,9 +156,9 @@ class VariableCollection:
                 available = ", ".join(
                     sorted(
                         {
-                            str(item.get("code") or item.get("label"))
+                            str(item.get("label") or item.get("path", [""])[-1])
                             for item in list_groups(self._groups)
-                            if item.get("code") or item.get("label")
+                            if item.get("label") or item.get("path")
                         }
                     )
                 )

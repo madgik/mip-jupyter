@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
 from .exceptions import UnsupportedOperationError
+from .labels import internal_code
 
 _OPERATOR_MAP = {
     "==": "equal",
@@ -41,36 +43,22 @@ _NEGATED_OPERATORS = {
 }
 
 
-def _code(value: Any) -> str:
-    return str(getattr(value, "code", value))
-
-
-def _value_type(value: Any) -> str:
-    if isinstance(value, (list, tuple)):
-        for item in value:
-            if item is not None:
-                return _value_type(item)
-        return "string"
-    if isinstance(value, bool):
-        return "boolean"
-    if isinstance(value, int) and not isinstance(value, bool):
-        return "integer"
-    if isinstance(value, float):
-        return "double"
-    return "string"
-
-
 @dataclass(frozen=True)
 class FilterExpression:
     """Serializable filter expression."""
 
     payload: dict[str, Any]
 
-    def explain(self) -> dict[str, Any]:
-        return _copy_payload(self.payload)
+    def explain(self, *, lookup: dict[str, str] | None = None) -> dict[str, Any]:
+        payload = _copy_payload(self.payload)
+        if lookup is None:
+            return payload
+        from .labels import sanitize_filter_payload
+
+        return sanitize_filter_payload(payload, lookup)
 
     def to_payload(self) -> dict[str, Any]:
-        return self.explain()
+        return _copy_payload(self.payload)
 
     def __and__(self, other: "FilterExpression") -> "FilterExpression":
         return _combine("AND", self, other)
@@ -101,21 +89,22 @@ def _negate_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _copy_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    copied = dict(payload)
+    copied = deepcopy(payload)
     if "rules" in copied:
         copied["rules"] = [dict(item) if isinstance(item, dict) else item for item in copied["rules"]]
     return copied
 
 
 def _combine(condition: str, left: FilterExpression, right: FilterExpression) -> FilterExpression:
-    return FilterExpression({"condition": condition, "rules": [left.explain(), right.explain()]})
+    return FilterExpression({"condition": condition, "rules": [left.to_payload(), right.to_payload()]})
 
 
 class F:
     """Bound variable used to create filter expressions."""
 
     def __init__(self, variable: Any):
-        self.field = _code(variable)
+        self._variable = variable
+        self.field = internal_code(variable)
 
     def __eq__(self, value: Any) -> FilterExpression:  # type: ignore[override]
         return self._rule("==", value)
@@ -168,7 +157,34 @@ class F:
                 "id": self.field,
                 "field": self.field,
                 "operator": _OPERATOR_MAP.get(operator, operator),
-                "value": value,
+                "value": self._serialize_value(value),
                 "type": _value_type(value),
             }
         )
+
+    def _serialize_value(self, value: Any) -> Any:
+        if isinstance(value, (list, tuple)):
+            return [self._serialize_scalar(item) for item in value]
+        return self._serialize_scalar(value)
+
+    def _serialize_scalar(self, value: Any) -> Any:
+        if hasattr(self._variable, "enumeration_code_for"):
+            mapped = self._variable.enumeration_code_for(value)
+            if mapped is not None:
+                return mapped
+        return value
+
+
+def _value_type(value: Any) -> str:
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            if item is not None:
+                return _value_type(item)
+        return "string"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return "integer"
+    if isinstance(value, float):
+        return "double"
+    return "string"

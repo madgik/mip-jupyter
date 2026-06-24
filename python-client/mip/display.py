@@ -7,6 +7,8 @@ from typing import Iterable
 from typing import Mapping
 from typing import Sequence
 
+from .labels import public_label
+
 HELP_TEXT: dict[str, str] = {
     "Client": """\
 Client help
@@ -25,11 +27,11 @@ Catalog help
 Useful methods:
 - catalog.summaries()         compact list of data models
 - catalog.tree()              ASCII overview of all models
-- catalog.data_model("code")  pick one model to explore
+- catalog.data_model("Dementia")  pick one model to explore
 - catalog.list()              all DataModel objects
 
 Typical next step:
-  dm = catalog.data_model("dementia")
+  dm = catalog.data_model("Dementia")
   dm.summary()""",
     "DataModel": """\
 DataModel help
@@ -39,62 +41,62 @@ Useful methods:
 - dm.list_datasets()          dataset summaries as dicts
 - dm.datasets.list()          Dataset objects
 - dm.list_variables()         variable summaries as dicts
-- dm.variables.search("age")  find variables by name
+- dm.variables.search("Age")  find variables by name
 - dm.variables.numerical()    numeric variables only
 - dm.variables.categorical()  categorical variables only
 - dm.tree()                   hierarchy view
-- dm.variables.tree(group="demographics")
+- dm.variables.tree(group="Demographics")
 
 Typical next step:
-  age = dm.variables["age"]
+  age = dm.variables["Age"]
   age.summary()""",
     "Dataset": """\
 Dataset help
 
 Useful methods:
-- dataset.summary()       code, label, variable count
-- dataset.metadata()      full backend metadata dict
+- dataset.summary()       label and variable count
+- dataset.details()       label-safe metadata
 - dataset.variables()     variables available in this dataset
 - dataset.has_variable(v) check whether a variable is present
 
 Typical next step:
-  adni = dm.datasets["adni"]
+  adni = dm.datasets["ADNI"]
   adni.variables()""",
     "DatasetCollection": """\
 DatasetCollection help
 
 Useful methods:
 - dm.datasets.list()          all datasets
-- dm.datasets.search("adni")  find datasets by name
+- dm.datasets.search("ADNI")  find datasets by name
 - dm.datasets.to_frame()      tabular preview
-- dm.datasets["code"]         pick one dataset
+- dm.datasets["ADNI"]         pick one dataset
 
 Typical next step:
-  adni = dm.datasets["adni"]""",
+  adni = dm.datasets["ADNI"]""",
     "Variable": """\
 Variable help
 
 Useful methods:
-- variable.summary()    code, label, type, numerical/categorical flags
-- variable.metadata()   full backend metadata dict
-- variable.categories() allowed category values (if categorical)
+- variable.summary()    label, type, numerical/categorical flags
+- variable.details()    label-safe metadata and categories
+- variable.categories() allowed category labels (if categorical)
 
 Typical next step:
-  age = dm.variables["age"]
+  age = dm.variables["Age"]
   age.summary()""",
     "VariableCollection": """\
 VariableCollection help
 
 Useful methods:
-- dm.variables.search("age")     find by name or label
+- dm.variables.search("Age")     find by label
 - dm.variables.numerical()       numeric variables only
 - dm.variables.categorical()     categorical variables only
 - dm.variables.to_frame()        tabular preview
-- dm.variables.tree(group="...")   group hierarchy
-- dm.variables["code"]           pick one variable
+- dm.variables.tree(group="Demographics")   group hierarchy
+- dm.variables["Age"]           pick one variable
 
 Typical next step:
-  age = dm.variables["age"]""",
+  age = dm.variables["Age"]""",
     "AnalysisSet": """\
 AnalysisSet help
 
@@ -242,8 +244,7 @@ def to_frame(items: Iterable[Any]):
     return pd.DataFrame(rows)
 
 
-def variable_code(variable: Any) -> str:
-    return str(getattr(variable, "code", variable))
+from .labels import public_label
 
 
 def recommend_pipeline_steps(variables: Sequence[Any]) -> str:
@@ -253,7 +254,7 @@ def recommend_pipeline_steps(variables: Sequence[Any]) -> str:
     categorical: list[Any] = []
 
     for variable in variables:
-        code = variable_code(variable)
+        label = public_label(variable)
         is_num = getattr(variable, "is_numerical", lambda: False)()
         is_cat = getattr(variable, "is_categorical", lambda: False)()
         if is_num:
@@ -264,7 +265,7 @@ def recommend_pipeline_steps(variables: Sequence[Any]) -> str:
             categorical.append(variable)
         else:
             kind = "unknown"
-        lines.append(f"- {code}: {kind}")
+        lines.append(f"- {label}: {kind}")
 
     lines.append("")
     lines.append("Possible next steps:")
@@ -273,19 +274,19 @@ def recommend_pipeline_steps(variables: Sequence[Any]) -> str:
     lines.append("- pipeline.available_algorithms()")
 
     if numerical:
-        first = variable_code(numerical[0])
-        lines.append(f"- pipeline.histogram(variable={first})")
+        first = public_label(numerical[0])
+        lines.append(f'- pipeline.histogram(variable=variables["{first}"])')
     if len(numerical) >= 2:
-        x = variable_code(numerical[0])
-        y = variable_code(numerical[1])
-        lines.append(f"- pipeline.pearson_correlation(x={x}, y={y})")
+        x = public_label(numerical[0])
+        y = public_label(numerical[1])
+        lines.append(f'- pipeline.pearson_correlation(x=variables["{x}"], y=variables["{y}"])')
     if categorical and numerical:
-        xs = ", ".join(variable_code(item) for item in numerical[:2])
-        y = variable_code(categorical[0])
-        lines.append(f"- pipeline.logistic_regression(x=[{xs}], y={y}, positive_class=...)")
+        xs = ", ".join(f'variables["{public_label(item)}"]' for item in numerical[:2])
+        y = public_label(categorical[0])
+        lines.append(f'- pipeline.logistic_regression(x=[{xs}], y=variables["{y}"], positive_class=...)')
     elif len(categorical) >= 2:
-        x = variable_code(categorical[0])
-        y = variable_code(categorical[1])
-        lines.append(f"- pipeline.chi_square_test(x={x}, y={y})")
+        x = public_label(categorical[0])
+        y = public_label(categorical[1])
+        lines.append(f'- pipeline.chi_square_test(x=variables["{x}"], y=variables["{y}"])')
 
     return "\n".join(lines)

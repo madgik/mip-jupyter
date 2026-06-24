@@ -7,6 +7,8 @@ from typing import Mapping
 
 from .datasets import DatasetCollection
 from .display import HelpText
+from .labels import list_group_summaries
+from .labels import normalize_label
 from .variables import VariableCollection
 
 
@@ -16,9 +18,9 @@ class DataModel:
     def __init__(self, data: Mapping[str, Any], *, transport=None):
         self._transport = transport
         self._data = dict(data or {})
-        self.code = self._data.get("code")
+        self._code = self._data.get("code")
         self.version = self._data.get("version")
-        self.label = self._data.get("label") or self.code
+        self.label = self._data.get("label") or self._code
         self.longitudinal = self._data.get("longitudinal")
         self.groups = list(self._data.get("groups") or [])
         self.datasets_variables = dict(
@@ -32,7 +34,7 @@ class DataModel:
         self.datasets = DatasetCollection(self._data.get("datasets") or [], data_model=self)
 
     def __repr__(self) -> str:
-        return f"<DataModel(code={self.code!r}, version={self.version!r})>"
+        return f"<DataModel(label={self.label!r}, version={self.version!r})>"
 
     def _repr_html_(self) -> str:
         from .display import render_object_card
@@ -40,16 +42,15 @@ class DataModel:
         return render_object_card(
             f"DataModel: {self.name}",
             {
-                "code": self.code,
-                "version": self.version,
                 "label": self.label,
+                "version": self.version,
                 "n_datasets": len(self.datasets),
                 "n_variables": len(self.variables),
             },
             [
                 ".summary()",
                 ".datasets.list()",
-                ".variables.search(\"age\")",
+                ".variables.search(\"Age\")",
                 ".tree()",
                 ".help()",
             ],
@@ -62,22 +63,26 @@ class DataModel:
 
     @property
     def name(self) -> str:
-        if self.code and self.version:
-            return f"{self.code}:{self.version}"
-        return str(self.code or self.version or "")
+        if self.version:
+            return f"{self.label} ({self.version})"
+        return str(self.label or "")
 
-    def metadata(self) -> dict[str, Any]:
-        return dict(self._data)
+    def internal_name(self) -> str:
+        if self._code and self.version:
+            return f"{self._code}:{self.version}"
+        return str(self._code or self.version or "")
 
-    def summary(self) -> dict[str, Any]:
+    def details(self) -> dict[str, Any]:
         return {
-            "code": self.code,
-            "version": self.version,
             "label": self.label,
+            "version": self.version,
             "longitudinal": self.longitudinal,
             "n_variables": len(self.variables),
             "n_datasets": len(self.datasets),
         }
+
+    def summary(self) -> dict[str, Any]:
+        return self.details()
 
     def root_variables(self) -> list[dict[str, Any]]:
         return [dict(item) for item in (self._data.get("variables") or []) if isinstance(item, Mapping)]
@@ -89,9 +94,7 @@ class DataModel:
         return [variable.summary() for variable in self.variables.to_list()]
 
     def list_groups(self) -> list[dict[str, Any]]:
-        from .metadata_tree import list_groups
-
-        return list_groups(self.groups)
+        return list_group_summaries(self.groups)
 
     def tree(self, *, group: Any | None = None, include_variables: bool = False, max_lines: int = 250):
         from .metadata_tree import MetadataTree
@@ -108,9 +111,9 @@ class DataModel:
                 available = ", ".join(
                     sorted(
                         {
-                            str(item.get("code") or item.get("label"))
+                            str(item.get("label") or item.get("path", [""])[-1])
                             for item in list_groups(self.groups)
-                            if item.get("code") or item.get("label")
+                            if item.get("label") or item.get("path")
                         }
                     )
                 )

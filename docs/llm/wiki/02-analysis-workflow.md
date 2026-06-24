@@ -22,9 +22,9 @@ from mip.preprocessing import (
 )
 
 client = mip.Client.from_env()
-dm = client.catalog().data_model("dementia")
-dataset = dm.datasets["adni"]
-variables = [dm.variables["age"], dm.variables["mmse"]]
+dm = client.catalog().data_model("Dementia")
+dataset = dm.datasets["ADNI"]
+variables = [dm.variables["Age"], dm.variables["MMSE"]]
 ```
 
 ## 2. Define analysis scope
@@ -46,9 +46,9 @@ missing = MissingValuesHandler(strategies={mmse: "mean"})
 outliers = OutlierWinsorizer(strategies={mmse: "iqr"}, tails={mmse: "both"}, folds={mmse: 1.5})
 
 creator = CategoricalColumnCreator(
-    code="cognitive_profile",
-    rules={"preserved": F(mmse) >= 27, "impaired": F(mmse) < 20},
-    default_enumeration="unclassified",
+    label="Cognitive profile",
+    rules={"Preserved": F(mmse) >= 27, "Impaired": F(mmse) < 20},
+    default_enumeration="Unclassified",
 )
 ```
 

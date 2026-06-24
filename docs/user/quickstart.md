@@ -21,9 +21,11 @@ catalog = client.catalog()
 ```python
 catalog.list()
 catalog.tree()
-dm = catalog.data_model("dementia")
+dm = catalog.data_model("Dementia")
 dm.summary()
 ```
+
+Select data models, datasets, and variables by **label** (for example `"Dementia"`, `"ADNI"`, `"Age"`).
 
 ## Run a simple analysis
 
@@ -31,9 +33,9 @@ dm.summary()
 from mip.filters import F
 from mip.preprocessing import MissingValuesHandler
 
-adni = dm.datasets["adni"]
-age = dm.variables["age"]
-mmse = dm.variables["mmse"]
+adni = dm.datasets["ADNI"]
+age = dm.variables["Age"]
+mmse = dm.variables["MMSE"]
 
 analysis_set = mip.AnalysisSet(
     data_model=dm,

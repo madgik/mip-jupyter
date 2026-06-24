@@ -13,10 +13,11 @@ class TestAlgorithms(unittest.TestCase):
         ]
         registry = AlgorithmRegistry(transport)
 
-        self.assertEqual(registry.list()[0].name, "describe")
-        self.assertEqual(registry.search("logistic")[0].name, "logistic_regression")
-        self.assertEqual(registry.statistics()[0].name, "describe")
-        self.assertEqual(registry.models()[0].name, "logistic_regression")
+        self.assertEqual(registry.list()[0].label, "Describe")
+        self.assertEqual(registry.search("logistic")[0].label, "Logistic")
+        self.assertEqual(registry.statistics()[0].label, "Describe")
+        self.assertEqual(registry.models()[0].label, "Logistic")
+        self.assertNotIn("name", registry.list()[0].summary())
         transport.get.assert_called_with("/specifications/algorithms")
 
 

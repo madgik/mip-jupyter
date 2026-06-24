@@ -11,18 +11,29 @@ from mip.preprocessing import OutlierWinsorizer
 
 
 class Var:
-    def __init__(self, code):
-        self.code = code
+    def __init__(self, code, *, label=None):
+        self._code = code
+        self.label = label or code
+
+
+def _dm(transport):
+    dm = SimpleNamespace(_code="dementia", label="Dementia", version="0.1", _transport=transport)
+    dm.internal_name = lambda: "dementia:0.1"
+    return dm
+
+
+def _dataset(code, label):
+    return SimpleNamespace(_code=code, label=label)
 
 
 class TestPipeline(unittest.TestCase):
     def test_histogram_posts_transient_payload(self):
         transport = MagicMock()
         transport.post.return_value = {"status": "success", "result": {"bins": [1, 2], "counts": [3, 4]}}
-        dm = SimpleNamespace(code="dementia", version="0.1", _transport=transport)
-        adni = SimpleNamespace(code="adni")
-        age = Var("age")
-        mmse = Var("mmse")
+        dm = _dm(transport)
+        adni = _dataset("adni", "ADNI")
+        age = Var("age", label="Age")
+        mmse = Var("mmse", label="MMSE")
         analysis_set = AnalysisSet(data_model=dm, datasets=[adni], variables=[age, mmse])
 
         result = Pipeline(
@@ -51,10 +62,10 @@ class TestPipeline(unittest.TestCase):
     def test_logistic_regression_uses_persisted_endpoint(self):
         transport = MagicMock()
         transport.post.return_value = {"status": "success", "result": {"summary": {"feature_names": ["Intercept", "age"], "coefficients": [0.1, 0.5]}}}
-        dm = SimpleNamespace(code="dementia", version="0.1", _transport=transport)
-        age = Var("age")
-        diagnosis = Var("diagnosis")
-        analysis_set = AnalysisSet(data_model=dm, datasets=[SimpleNamespace(code="adni")], variables=[age, diagnosis])
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        diagnosis = Var("diagnosis", label="Diagnosis")
+        analysis_set = AnalysisSet(data_model=dm, datasets=[_dataset("adni", "ADNI")], variables=[age, diagnosis])
 
         result = Pipeline(analysis_set=analysis_set).logistic_regression(x=[age], y=diagnosis, positive_class="AD", mode="persisted")
 
@@ -69,12 +80,12 @@ class TestPipeline(unittest.TestCase):
     def test_t_test_serializes_required_backend_parameters(self):
         transport = MagicMock()
         transport.post.return_value = {"status": "success", "result": {}}
-        dm = SimpleNamespace(code="dementia", version="0.1", _transport=transport)
-        age = Var("age")
-        diagnosis = Var("diagnosis")
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        diagnosis = Var("diagnosis", label="Diagnosis")
         analysis_set = AnalysisSet(
             data_model=dm,
-            datasets=[SimpleNamespace(code="adni")],
+            datasets=[_dataset("adni", "ADNI")],
             variables=[age, diagnosis],
         )
 
@@ -99,21 +110,21 @@ class TestPipeline(unittest.TestCase):
     def test_pipeline_serializes_new_columns(self):
         transport = MagicMock()
         transport.post.return_value = {"status": "success", "result": {}}
-        dm = SimpleNamespace(code="dementia", version="0.1", _transport=transport)
-        mmse = Var("mmse")
-        cdr = Var("cdr")
+        dm = _dm(transport)
+        mmse = Var("mmse", label="MMSE")
+        cdr = Var("cdr", label="CDR")
         analysis_set = AnalysisSet(
             data_model=dm,
-            datasets=[SimpleNamespace(code="adni")],
+            datasets=[_dataset("adni", "ADNI")],
             variables=[mmse, cdr],
         )
         creator = CategoricalColumnCreator(
-            code="cognitive_profile",
+            label="Cognitive profile",
             rules={
-                "preserved": F(mmse) >= 27,
-                "severe": F(mmse) < 20,
+                "Preserved": F(mmse) >= 27,
+                "Severe": F(mmse) < 20,
             },
-            default_enumeration="unclassified",
+            default_enumeration="Unclassified",
         )
 
         Pipeline(
@@ -130,23 +141,23 @@ class TestPipeline(unittest.TestCase):
         creator_step = analysis["preprocessing"][1]
         self.assertEqual(creator_step["parameters"]["strategy"], "filter_rules")
         self.assertEqual(creator_step["parameters"]["code"], "cognitive_profile")
-        self.assertIn("preserved", creator_step["parameters"]["rules"])
+        self.assertIn("Preserved", creator_step["parameters"]["rules"])
 
     def test_pipeline_logistic_regression_can_use_derived_variable(self):
         transport = MagicMock()
         transport.post.return_value = {"status": "success", "result": {"summary": {}}}
-        dm = SimpleNamespace(code="dementia", version="0.1", _transport=transport)
-        age = Var("age")
-        diagnosis = Var("diagnosis")
-        mmse = Var("mmse")
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        diagnosis = Var("diagnosis", label="Diagnosis")
+        mmse = Var("mmse", label="MMSE")
         analysis_set = AnalysisSet(
             data_model=dm,
-            datasets=[SimpleNamespace(code="adni")],
+            datasets=[_dataset("adni", "ADNI")],
             variables=[age, diagnosis, mmse],
         )
         creator = CategoricalColumnCreator(
-            code="cognitive_profile",
-            rules={"preserved": F(mmse) >= 27},
+            label="Cognitive profile",
+            rules={"Preserved": F(mmse) >= 27},
         )
 
         Pipeline(

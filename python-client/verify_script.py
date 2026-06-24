@@ -42,11 +42,11 @@ client = mip.Client("http://mock-backend/services")
 client._transport = transport
 
 print("Testing catalog path...", flush=True)
-dm = client.catalog().data_model("dementia")
-adni = dm.datasets["adni"]
-age = dm.variables["age"]
-mmse = dm.variables["mmse"]
-if dm.name != "dementia:0.1" or not adni.has_variable(mmse):
+dm = client.catalog().data_model("Dementia")
+adni = dm.datasets["ADNI"]
+age = dm.variables["Age"]
+mmse = dm.variables["MMSE"]
+if dm.name != "Dementia (0.1)" or not adni.has_variable(mmse):
     print("Catalog smoke test FAILED", flush=True)
     sys.exit(1)
 print("Catalog smoke test PASSED", flush=True)

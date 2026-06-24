@@ -2,6 +2,8 @@
 
 Thin client over platform-backend. Notebooks never call Exaflow directly.
 
+Public selection and display use **labels** only. Internal codes are serialized automatically in backend payloads.
+
 ## Imports
 
 ```python
@@ -15,10 +17,10 @@ from mip.preprocessing import CategoricalColumnCreator, MissingValuesHandler, Ou
 ```python
 client = mip.Client.from_env()
 catalog = client.catalog()
-dm = catalog.data_model("code", version="x.y")  # version optional
-dm.datasets["name"]
-dm.variables["code"]
-dm.variables.search("text")
+dm = catalog.data_model("Dementia", version="0.1")  # version optional
+dm.datasets["ADNI"]
+dm.variables["Age"]
+dm.variables.search("MMSE")
 ```
 
 ## Discoverability
@@ -40,7 +42,7 @@ Evaluating `DataModel`, `Dataset`, `Variable`, `AnalysisSet`, `Pipeline`, or `Re
 
 ```python
 (F(age) >= 50) & F(mmse).is_not_null()
-F(diagnosis).isin(["AD", "CN"])
+F(diagnosis).isin(["Alzheimer's disease", "Cognitive normal"])  # enumeration labels
 F(mmse).between(20, 26)
 expr1 | expr2
 ~F(x).isin([...])  # rewrites to not_in
@@ -53,7 +55,7 @@ String-match operators (`contains`, `starts_with`, `ends_with`) may not be accep
 ```python
 MissingValuesHandler(strategies={age: "median", mmse: "mean"})
 OutlierWinsorizer(strategies={mmse: "iqr"}, tails={mmse: "both"}, folds={mmse: 1.5})
-CategoricalColumnCreator(code="cohort", rules={...}, default_enumeration="other")
+CategoricalColumnCreator(label="Cognitive profile", rules={...}, default_enumeration="Other")
 ```
 
 Use `creator.variable` for the derived column in downstream algorithms.
@@ -65,7 +67,7 @@ Use `creator.variable` for the derived column in downstream algorithms.
 ```python
 pipeline = mip.Pipeline(analysis_set=..., filters=..., handle_missing=...)
 pipeline.histogram(variable=mmse, bins=20)
-pipeline.logistic_regression(x=[age, sex], y=diagnosis, positive_class="AD")
+pipeline.logistic_regression(x=[age, sex], y=diagnosis, positive_class="Alzheimer's disease")
 ```
 
 ## Results

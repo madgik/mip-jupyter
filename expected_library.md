@@ -55,6 +55,7 @@ mip/
   transport.py
   metadata_tree.py
   display.py
+  labels.py
   exceptions.py
   errors.py          # compatibility aliases for exception imports only
 ```
@@ -87,25 +88,30 @@ PLATFORM_BACKEND_ALLOW_REDIRECTS
 
 ## Catalog Discovery
 
+Public selection uses **labels** (human-readable names). Internal codes are kept private and used only when building backend payloads.
+
 ```python
 catalog.list()
 catalog.summaries()
 catalog.tree()
 
-dm = catalog.data_model("dementia")
+dm = catalog.data_model("Dementia")
 dm.summary()
 dm.list_datasets()
 dm.datasets.list()
 dm.list_groups()
 dm.tree(include_variables=True)
-dm.tree(group="clinical", include_variables=True)
-dm.variables.tree(group="cognitive")
+dm.tree(group="Clinical", include_variables=True)
+dm.variables.tree(group="Cognitive")
 dm.variables.list()
 dm.variables.search("MMSE")
-dm.datasets.search("adni")
-```
+dm.datasets.search("ADNI")
 
-`catalog.list()` and `catalog.data_models()` return the same native list of `DataModel` objects. `catalog.tree()` renders an ASCII overview of all authorized models. Within a model, `datasets.list()` and `variables.list()` return flat lists for selection. `dm.tree()` and `dm.variables.tree()` render the backend group hierarchy; pass `group="clinical"` (code or label) to start from a specific group subtree. Use `dm.list_groups()` to discover available group codes.
+age = dm.variables["Age"]
+adni = dm.datasets["ADNI"]
+age.details()
+age.categories()  # e.g. ["Male", "Female"] not backend codes
+```
 
 ## Discoverability
 
@@ -200,27 +206,27 @@ outliers = OutlierWinsorizer(
 )
 ```
 
-Variable-object keys serialize to `variable.code`; string keys pass through unchanged.
+Variable-object keys in preprocessing maps serialize to internal codes automatically; pass `Variable` or `DerivedVariable` objects, not string codes.
 
 `CategoricalColumnCreator` builds a derived categorical column from filter rules:
 
 ```python
 creator = CategoricalColumnCreator(
-    code="cognitive_profile",
+    label="Cognitive profile",
     rules={
-        "preserved": (F(mmse) >= 27) & (F(cdr) == 0),
-        "severe_impairment": F(mmse) < 20,
+        "Preserved": (F(mmse) >= 27) & (F(cdr) == 0),
+        "Severe impairment": F(mmse) < 20,
     },
-    default_enumeration="unclassified",
+    default_enumeration="Unclassified",
 )
 
 derived = creator.variable
-derived.code
+derived.label
 derived.categories()
-derived.metadata()
+derived.details()
 ```
 
-The creator serializes to the `categorical_column_creator` preprocessing step with `strategy="filter_rules"`.
+The creator serializes to the `categorical_column_creator` preprocessing step with `strategy="filter_rules"`. Internal `_code` is generated from the label for backend payloads only.
 
 ## Pipeline Execution
 
@@ -290,7 +296,17 @@ registry.statistics()
 registry.models()
 ```
 
-Each returned `Algorithm` exposes `.spec()` for the backend DTO and `.summary()` for a compact readable view.
+Each returned `Algorithm` exposes `.spec()` for the backend DTO and `.summary()` for a compact readable view (`label`, `description`, `type` only).
+
+## Label-only public API (breaking changes)
+
+- Public identity is **label**, not internal code.
+- `Variable.metadata()` replaced by label-safe `Variable.details()`.
+- `Algorithm.summary()` no longer includes backend `name`.
+- `Catalog.data_model()`, `VariableCollection.__getitem__`, and `DatasetCollection.__getitem__` index by label (case-insensitive).
+- `categories()` returns human-readable enumeration labels.
+- Filter `isin([...])` accepts enumeration labels; codes are mapped during payload serialization.
+- `CategoricalColumnCreator(label=...)` replaces the `code=` parameter; internal code is derived automatically.
 
 ## Experiment Registry
 

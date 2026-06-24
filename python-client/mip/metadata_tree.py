@@ -56,13 +56,13 @@ class PathologyView:
 
 def pathology_from_data_model(model: DataModel) -> PathologyView:
     return PathologyView(
-        code=model.code,
+        code=model._code,
         version=model.version,
         label=model.label,
         longitudinal=model.longitudinal,
         variables=list(model.root_variables()),
         groups=list(model.groups or []),
-        datasets=[dataset.metadata() for dataset in model.datasets.to_list()],
+        datasets=[dataset.details() for dataset in model.datasets.to_list()],
         datasets_variables=dict(model.datasets_variables or {}),
     )
 
@@ -75,7 +75,7 @@ def render_catalog_tree(models: list[DataModel], *, max_lines: int = 250) -> str
 
     ordered = sorted(
         [pathology_from_data_model(model) for model in models],
-        key=lambda model: ((model.code or "").lower(), str(model.version or "").lower()),
+        key=lambda model: (str(model.label or "").lower(), str(model.version or "").lower()),
     )
     for index, model in enumerate(ordered):
         connector = "`--" if index == len(ordered) - 1 else "|--"
@@ -88,8 +88,7 @@ def render_catalog_tree(models: list[DataModel], *, max_lines: int = 250) -> str
             f"{grouped_variables_count} grouped vars",
         ]
         writer.add(
-            f"{connector} {_format_name_label(model.code, model.label)}:{model.version} "
-            f"[{', '.join(summary)}]"
+            f"{connector} {model.label or model.name} [{', '.join(summary)}]"
         )
     return writer.render()
 
@@ -113,9 +112,9 @@ def render_pathology_tree(
         )
 
     writer = _LineWriter(max_lines=max_lines)
-    title = f"Metadata tree for {pathology.name or '<unknown>'}"
-    if pathology.label and pathology.label != pathology.name:
-        title += f" ({pathology.label})"
+    title = f"Metadata tree for {pathology.label or pathology.name or '<unknown>'}"
+    if pathology.version:
+        title += f" ({pathology.version})"
     writer.add(title)
 
     sections: list[tuple[str, Any]] = []
@@ -209,7 +208,7 @@ def find_group(groups: Iterable[Any], selector: Any) -> tuple[Any, list[str]] | 
     def visit(group: Any, path: list[str]) -> tuple[Any, list[str]] | None:
         code = str(_item_get(group, "code") or "").strip()
         label = str(_item_get(group, "label") or "").strip()
-        current_path = path + [code or label or "<unknown>"]
+        current_path = path + [label or "<unknown>"]
         if _matches_group_selector(group, needle):
             return group, current_path
         for child in _item_get(group, "groups", default=[]):
@@ -231,7 +230,7 @@ def list_groups(groups: Iterable[Any]) -> list[dict[str, Any]]:
     def visit(group: Any, path: list[str]) -> None:
         code = str(_item_get(group, "code") or "").strip()
         label = str(_item_get(group, "label") or "").strip()
-        current_path = path + [code or label or "<unknown>"]
+        current_path = path + [label or "<unknown>"]
         items.append({"code": code or None, "label": label or None, "path": current_path})
         for child in _item_get(group, "groups", default=[]):
             visit(child, current_path)
@@ -358,13 +357,8 @@ def _format_dataset(dataset: Any) -> str:
     if isinstance(dataset, str):
         return dataset
     label = str(_item_get(dataset, "label") or "").strip()
-    code = str(_item_get(dataset, "code") or "").strip()
-    if label and code and label != code:
-        return f"{label} ({code})"
     if label:
         return label
-    if code:
-        return code
     return "<unknown>"
 
 

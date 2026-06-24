@@ -7,6 +7,9 @@ from typing import Sequence
 
 from .exceptions import MipConfigurationError
 from .display import HelpText
+from .labels import build_code_to_label_lookup
+from .labels import public_label
+from .labels import sanitize_inputdata
 from .request_builder import build_inputdata
 from .request_builder import code as _code
 from .results import Result
@@ -23,6 +26,11 @@ class AnalysisSet:
 
     def data_model_name(self) -> str:
         return _data_model_name(self.data_model)
+
+    def _lookup(self) -> dict[str, str]:
+        lookup = build_code_to_label_lookup(self.variables, self.datasets, [self.data_model])
+        lookup[self.data_model_name()] = public_label(self.data_model)
+        return lookup
 
     def inputdata(self, *, filters=None, extra_variables: Sequence[Any] | None = None) -> dict:
         variables = [_code(variable) for variable in self.variables]
@@ -47,13 +55,13 @@ class AnalysisSet:
 
     def summary(self) -> dict[str, Any]:
         return {
-            "data_model": self.data_model_name(),
-            "datasets": [_code(dataset) for dataset in self.datasets],
-            "variables": [_code(variable) for variable in self.variables],
+            "data_model": public_label(self.data_model),
+            "datasets": [public_label(dataset) for dataset in self.datasets],
+            "variables": [public_label(variable) for variable in self.variables],
         }
 
     def explain(self) -> dict[str, Any]:
-        return self.inputdata()
+        return sanitize_inputdata(self.inputdata(), lookup=self._lookup())
 
     def _repr_html_(self) -> str:
         from .display import render_object_card
@@ -83,8 +91,6 @@ class AnalysisSet:
 
 
 def _data_model_name(data_model: Any) -> str:
-    code = getattr(data_model, "code", None)
-    version = getattr(data_model, "version", None)
-    if code and version:
-        return f"{code}:{version}"
+    if hasattr(data_model, "internal_name"):
+        return data_model.internal_name()
     return _code(data_model)

@@ -2,20 +2,22 @@
 
 Use this guide when you have a MIP object and want to know what to call next. Every notebook-facing object also exposes `.help()` — for example `dm.help()` or `pipeline.help()`.
 
+Selection and display use **human-readable labels** only (for example `"Age"`, `"ADNI"`, `"Dementia"`). Internal codes are never shown or typed in notebook code.
+
 ## Goal → API quick reference
 
 | User goal | Use |
 |-----------|-----|
 | See available data models | `catalog.summaries()` or `catalog.tree()` |
-| Pick a data model | `catalog.data_model("dementia")` |
+| Pick a data model | `catalog.data_model("Dementia")` |
 | Understand a data model | `dm.summary()` then `dm.tree()` |
 | Find a variable | `dm.variables.search("age")` |
 | See only numeric variables | `dm.variables.numerical()` |
 | See only categorical variables | `dm.variables.categorical()` |
-| Browse variables by group | `dm.variables.tree(group="demographics")` |
-| Understand a variable | `variable.summary()` then `variable.metadata()` |
+| Browse variables by group | `dm.variables.tree(group="Demographics")` |
+| Understand a variable | `variable.summary()` then `variable.details()` |
 | See allowed categories | `variable.categories()` |
-| Check datasets | `dm.datasets.list()` or `dm.datasets.search("adni")` |
+| Check datasets | `dm.datasets.list()` or `dm.datasets.search("ADNI")` |
 | Tabular preview of variables | `dm.variables.to_frame()` |
 | Tabular preview of datasets | `dm.datasets.to_frame()` |
 | Find algorithms | `client.algorithms().search("logistic")` |
@@ -38,23 +40,23 @@ catalog.summaries()
 catalog.tree()
 
 # 2. Pick one and explore
-dm = catalog.data_model("dementia")
+dm = catalog.data_model("Dementia")
 dm.help()
 dm.summary()
 
 # 3. Find variables and datasets
 dm.variables.search("age")
 dm.variables.to_frame().head()
-dm.datasets.search("adni")
+dm.datasets.search("ADNI")
 
 # 4. Inspect one variable
-age = dm.variables["age"]
+age = dm.variables["Age"]
 age.summary()
 age.categories()
 
 # 5. Build and preview an analysis
-adni = dm.datasets["adni"]
-mmse = dm.variables["mmse"]
+adni = dm.datasets["ADNI"]
+mmse = dm.variables["MMSE"]
 analysis_set = mip.AnalysisSet(data_model=dm, datasets=[adni], variables=[age, mmse])
 pipeline = mip.Pipeline(analysis_set=analysis_set)
 pipeline.recommend_algorithms()

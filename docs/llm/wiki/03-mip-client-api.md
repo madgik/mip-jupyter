@@ -9,6 +9,7 @@
 - Thin client over platform-backend — no direct Exaflow calls.
 - Entry points: `mip.Client`, `mip.AnalysisSet`, `mip.Pipeline`.
 - No `.table()` API.
+- Public identity is **label**, not internal code. Selection, summaries, trees, and explain previews show labels only.
 
 ## Imports
 
@@ -23,10 +24,10 @@ from mip.preprocessing import CategoricalColumnCreator, MissingValuesHandler, Ou
 ```python
 client = mip.Client.from_env()
 catalog = client.catalog()
-dm = catalog.data_model("code", version="x.y")  # version optional
-dm.datasets["name"]
-dm.variables["code"]
-dm.variables.search("text")
+dm = catalog.data_model("Dementia", version="0.1")  # version optional
+dm.datasets["ADNI"]
+dm.variables["Age"]
+dm.variables.search("MMSE")
 ```
 
 ## Discoverability
@@ -37,6 +38,8 @@ pipeline.help()
 dm.variables.to_frame()
 mip.to_frame(dm.variables.search("age"))
 pipeline.recommend_algorithms()
+variable.details()   # label-safe metadata (replaces metadata())
+variable.categories()  # human-readable enumeration labels
 ```
 
 User guide: `docs/user/how-to-choose.md`.
@@ -45,7 +48,7 @@ User guide: `docs/user/how-to-choose.md`.
 
 ```python
 (F(age) >= 50) & F(mmse).is_not_null()
-F(diagnosis).isin(["AD", "CN"])
+F(diagnosis).isin(["Alzheimer's disease", "CN"])  # enumeration labels
 F(mmse).between(20, 26)
 expr1 | expr2
 ~F(x).isin([...])  # rewrites to not_in
@@ -58,7 +61,7 @@ String-match operators (`contains`, `starts_with`, `ends_with`) may not be accep
 ```python
 MissingValuesHandler(strategies={age: "median", mmse: "mean"})
 OutlierWinsorizer(strategies={mmse: "iqr"}, tails={mmse: "both"}, folds={mmse: 1.5})
-CategoricalColumnCreator(code="cohort", rules={...}, default_enumeration="other")
+CategoricalColumnCreator(label="Cognitive profile", rules={...}, default_enumeration="Other")
 ```
 
 Use `creator.variable` for the derived column in downstream algorithms.
@@ -80,6 +83,8 @@ client.algorithms().list()
 client.algorithms().search("logistic")
 client.experiments().list()
 ```
+
+`Algorithm.summary()` returns `{label, description, type}` only (no backend name).
 
 ## Results
 

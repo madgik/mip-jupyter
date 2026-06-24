@@ -26,7 +26,7 @@ catalog = client.catalog()
 ```python
 catalog.list()       # list of DataModel objects
 catalog.tree()       # ASCII overview
-dm = catalog.data_model("dementia")  # or another model name
+dm = catalog.data_model("Dementia")  # select by label
 dm.summary()
 dm.tree(include_variables=True)
 ```
@@ -34,12 +34,12 @@ dm.tree(include_variables=True)
 ### 3. Select datasets and variables
 
 ```python
-adni = dm.datasets["adni"]
-age = dm.variables["age"]
-mmse = dm.variables["mmse"]
+adni = dm.datasets["ADNI"]
+age = dm.variables["Age"]
+mmse = dm.variables["MMSE"]
 ```
 
-Use `dm.variables.search("MMSE")` or `dm.datasets.search("adni")` to find codes.
+Use `dm.variables.search("MMSE")` or `dm.datasets.search("ADNI")` to find items by label or description.
 
 Objects expose `.help()` for method hints. See `docs/how-to-choose.md` (workspace `docs/`) for a goal → API decision guide.
 
@@ -79,5 +79,6 @@ Run cells in `workspace/Welcome.ipynb` for the full getting-started walkthrough.
 
 - No direct Exaflow calls — all HTTP goes through platform-backend.
 - No `.table()` API — it does not exist.
+- Select and read **labels** only; internal codes are never shown in notebook code.
 
 **Next file:** `workspace/Welcome.ipynb` for hands-on practice, or `02-analysis-workflow.md` for pipeline details.

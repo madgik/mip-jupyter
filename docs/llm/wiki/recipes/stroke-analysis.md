@@ -23,10 +23,10 @@ Select explicit variable objects before creating the analysis set:
 
 ```python
 selected_variables = [
-    dm.variables["age"],
-    dm.variables["nihss_24h"],
-    dm.variables["biol_sex"],
-    # add stroke-specific codes from catalog
+    dm.variables["Age"],
+    dm.variables["NIHSS 24h"],
+    dm.variables["Biological sex"],
+    # add stroke-specific variables from catalog labels
 ]
 
 analysis_set = mip.AnalysisSet(
@@ -45,13 +45,12 @@ from mip.filters import F
 from mip.preprocessing import CategoricalColumnCreator
 
 stroke_territory_cohort = CategoricalColumnCreator(
-    code="stroke_territory",
     label="Stroke Territory",
     rules={
         "ACS": F(territory_var).isin(["ACS"]),
         "PCS": F(territory_var).isin(["PCS"]),
     },
-    default_enumeration="other",
+    default_enumeration="Other",
 )
 
 cohort_var = stroke_territory_cohort.variable

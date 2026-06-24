@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from .datamodel import DataModel
 from .display import HelpText
+from .labels import normalize_label
+from .labels import public_label
 from .metadata_tree import MetadataTree
 from .metadata_tree import render_catalog_tree
 
@@ -32,20 +34,22 @@ class Catalog:
         """Render an ASCII tree of all authorized data models."""
         return MetadataTree(render_catalog_tree(self.data_models(), max_lines=max_lines))
 
-    def data_model(self, code: str, version: str | None = None) -> DataModel:
-        matches = [model for model in self.data_models() if model.code == code]
+    def data_model(self, label: str, version: str | None = None) -> DataModel:
+        needle = normalize_label(label)
+        matches = [model for model in self.data_models() if normalize_label(model.label) == needle]
         if version is not None:
             for model in matches:
                 if str(model.version) == str(version):
                     return model
-            raise LookupError(f"No data model found for '{code}:{version}'.")
+            raise LookupError(f"No data model found for {label!r} version {version!r}.")
         if not matches:
-            raise LookupError(f"No data model found for '{code}'.")
+            available = ", ".join(sorted({public_label(model) for model in self.data_models()}))
+            raise LookupError(f"No data model found for {label!r}. Available: {available}")
         if len(matches) > 1:
-            available = ", ".join(sorted(model.name for model in matches))
+            available = ", ".join(sorted({model.name for model in matches}))
             raise LookupError(
                 "Multiple data model versions found. Pass version explicitly. "
-                f"Available for '{code}': {available}"
+                f"Available for {label!r}: {available}"
             )
         return matches[0]
 
