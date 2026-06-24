@@ -33,6 +33,32 @@ class DataModel:
     def __repr__(self) -> str:
         return f"<DataModel(code={self.code!r}, version={self.version!r})>"
 
+    def _repr_html_(self) -> str:
+        from .display import render_object_card
+
+        return render_object_card(
+            f"DataModel: {self.name}",
+            {
+                "code": self.code,
+                "version": self.version,
+                "label": self.label,
+                "n_datasets": len(self.datasets),
+                "n_variables": len(self.variables),
+            },
+            [
+                ".summary()",
+                ".datasets.list()",
+                ".variables.search(\"age\")",
+                ".tree()",
+                ".help()",
+            ],
+        )
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("DataModel")
+
     @property
     def name(self) -> str:
         if self.code and self.version:

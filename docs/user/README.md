@@ -16,6 +16,7 @@ Welcome to the Medical Informatics Platform (MIP) Jupyter workspace. The `mip` P
 ## Guides
 
 - [Quickstart](quickstart.md) — connect, discover data, run a simple analysis
+- [How to choose the right API call](how-to-choose.md) — goal → method decision guide
 - [API reference](api-reference.md) — filters, preprocessing, pipeline methods, results
 - [Workspace guide](workspace-guide.md) — where to save work, examples vs scratch, kernel tips
 - [Troubleshooting](troubleshooting.md) — connection, import, and backend errors

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .analysis import AnalysisSet
 from .client import Client
+from .display import to_frame
 from .exceptions import MipAlgorithmNotAvailable
 from .exceptions import MipBackendError
 from .exceptions import MipConfigurationError
@@ -20,4 +21,5 @@ __all__ = [
     "MipError",
     "Pipeline",
     "UnsupportedOperationError",
+    "to_frame",
 ]

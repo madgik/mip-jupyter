@@ -21,6 +21,21 @@ dm.variables["code"]
 dm.variables.search("text")
 ```
 
+## Discoverability
+
+Every notebook object exposes `.help()` — for example `dm.help()` or `pipeline.help()`. See [How to choose the right API call](how-to-choose.md) for a goal → method guide.
+
+```python
+dm.help()
+dm.variables.to_frame()
+dm.datasets.to_frame()
+mip.to_frame(dm.variables.search("age"))
+pipeline.recommend_algorithms()
+pipeline.available_algorithms()
+```
+
+Evaluating `DataModel`, `Variable`, `AnalysisSet`, `Pipeline`, or `Result` in a cell shows a compact HTML summary card.
+
 ## Filters
 
 ```python

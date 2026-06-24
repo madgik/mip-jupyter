@@ -26,6 +26,24 @@ class Dataset:
     def __repr__(self) -> str:
         return f"<Dataset(code={self.code!r})>"
 
+    def _repr_html_(self) -> str:
+        from .display import render_object_card
+
+        return render_object_card(
+            f"Dataset: {self.code}",
+            {
+                "code": self.code,
+                "label": self.label,
+                "n_variables": len(self.variables()),
+            },
+            [".summary()", ".metadata()", ".variables()", ".help()"],
+        )
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("Dataset")
+
     def metadata(self) -> dict[str, Any]:
         return dict(self._data)
 
@@ -87,3 +105,13 @@ class DatasetCollection:
     def list(self) -> list[Dataset]:
         """Return all datasets as a list."""
         return self.to_list()
+
+    def to_frame(self):
+        from .display import to_frame
+
+        return to_frame(self._items)
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("DatasetCollection")

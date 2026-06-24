@@ -29,6 +29,18 @@ dm.variables["code"]
 dm.variables.search("text")
 ```
 
+## Discoverability
+
+```python
+dm.help()
+pipeline.help()
+dm.variables.to_frame()
+mip.to_frame(dm.variables.search("age"))
+pipeline.recommend_algorithms()
+```
+
+User guide: `docs/user/how-to-choose.md`.
+
 ## Filters
 
 ```python

@@ -18,6 +18,25 @@ class Variable:
     def __repr__(self) -> str:
         return f"<Variable(code={self.code!r})>"
 
+    def _repr_html_(self) -> str:
+        from .display import render_object_card
+
+        return render_object_card(
+            f"Variable: {self.code}",
+            {
+                "label": self.label,
+                "type": self._data.get("type"),
+                "numerical": self.is_numerical(),
+                "categorical": self.is_categorical(),
+            },
+            [".summary()", ".metadata()", ".categories()", ".help()"],
+        )
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("Variable")
+
     def metadata(self) -> dict[str, Any]:
         return dict(self._data)
 
@@ -153,3 +172,13 @@ class VariableCollection:
                 focus_group_path=focus_group_path,
             )
         )
+
+    def to_frame(self):
+        from .display import to_frame
+
+        return to_frame(self._items)
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("VariableCollection")

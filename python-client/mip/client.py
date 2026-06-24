@@ -62,6 +62,11 @@ class Client:
     def experiments(self):
         return ExperimentRegistry(self._transport)
 
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("Client")
+
 
 class ExperimentRegistry:
     """Small internal-facing registry for experiment execution endpoints."""

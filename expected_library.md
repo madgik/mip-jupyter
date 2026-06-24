@@ -54,6 +54,7 @@ mip/
   sklearn.py
   transport.py
   metadata_tree.py
+  display.py
   exceptions.py
   errors.py          # compatibility aliases for exception imports only
 ```
@@ -105,6 +106,38 @@ dm.datasets.search("adni")
 ```
 
 `catalog.list()` and `catalog.data_models()` return the same native list of `DataModel` objects. `catalog.tree()` renders an ASCII overview of all authorized models. Within a model, `datasets.list()` and `variables.list()` return flat lists for selection. `dm.tree()` and `dm.variables.tree()` render the backend group hierarchy; pass `group="clinical"` (code or label) to start from a specific group subtree. Use `dm.list_groups()` to discover available group codes.
+
+## Discoverability
+
+Notebook-facing objects expose `.help()` with useful methods and typical next steps:
+
+```python
+client.help()
+catalog.help()
+dm.help()
+age.help()
+pipeline.help()
+```
+
+Evaluating objects in a notebook cell renders a compact HTML card via `_repr_html_()` for `DataModel`, `Dataset`, `Variable`, `AnalysisSet`, `Pipeline`, and `Result`.
+
+Tabular previews:
+
+```python
+dm.variables.to_frame()
+dm.datasets.to_frame()
+client.algorithms().to_frame()
+mip.to_frame(dm.variables.search("age"))
+```
+
+Pipeline guidance:
+
+```python
+pipeline.available_algorithms()
+pipeline.recommend_algorithms()
+```
+
+User-facing decision guide: `docs/user/how-to-choose.md` (shipped to workspace `docs/`).
 
 ## Analysis Set
 

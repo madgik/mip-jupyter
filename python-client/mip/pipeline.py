@@ -128,6 +128,46 @@ class Pipeline:
     def explain(self) -> dict[str, Any]:
         return self.summary()
 
+    def available_algorithms(self) -> list[str]:
+        return [
+            "describe",
+            "histogram",
+            "t_test",
+            "pearson_correlation",
+            "chi_square_test",
+            "logistic_regression",
+        ]
+
+    def recommend_algorithms(self) -> str:
+        from .display import recommend_pipeline_steps
+
+        return recommend_pipeline_steps(self.analysis_set.variables)
+
+    def _repr_html_(self) -> str:
+        from .display import render_object_card
+
+        summary = self.summary()
+        return render_object_card(
+            "Pipeline",
+            {
+                "data_model": summary["analysis_set"]["data_model"],
+                "variables": ", ".join(summary["analysis_set"]["variables"]),
+                "filters": "yes" if self.filters is not None else "no",
+                "preprocessing": "yes" if summary.get("preprocessing") else "no",
+            },
+            [
+                ".explain()",
+                ".recommend_algorithms()",
+                ".histogram(variable=...)",
+                ".help()",
+            ],
+        )
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("Pipeline")
+
     def _execute_algorithm(
         self,
         name: str,

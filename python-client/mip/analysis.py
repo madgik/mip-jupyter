@@ -54,6 +54,25 @@ class AnalysisSet:
     def explain(self) -> dict[str, Any]:
         return self.inputdata()
 
+    def _repr_html_(self) -> str:
+        from .display import render_object_card
+
+        summary = self.summary()
+        return render_object_card(
+            "AnalysisSet",
+            {
+                "data_model": summary["data_model"],
+                "datasets": ", ".join(summary["datasets"]),
+                "variables": ", ".join(summary["variables"]),
+            },
+            [".summary()", ".explain()", ".help()"],
+        )
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("AnalysisSet")
+
     def _require_transport(self):
         if self._transport is None:
             raise MipConfigurationError(

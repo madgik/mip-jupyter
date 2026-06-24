@@ -59,3 +59,8 @@ class Catalog:
         for model in self.data_models():
             results.extend(model.datasets.search(text))
         return results
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("Catalog")

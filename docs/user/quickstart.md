@@ -54,6 +54,7 @@ result.summary()
 ## Next steps
 
 - Open `Welcome.ipynb` for a guided walkthrough.
+- See [How to choose the right API call](how-to-choose.md) when you are unsure which method to use.
 - See `examples/feres_analysis.ipynb` for a stroke-territory analysis.
 - See [API reference](api-reference.md) for the full cheat sheet.
 - Save your own notebooks under `scratch/`.

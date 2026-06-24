@@ -20,6 +20,23 @@ class Result:
     def summary(self) -> Any:
         return self.raw
 
+    def _repr_html_(self) -> str:
+        from .display import render_object_card
+
+        return render_object_card(
+            f"Result: {self.result_type or 'unknown'}",
+            {
+                "result_type": self.result_type,
+                "hint": "Call .summary() for payload; .raw and .payload also available",
+            },
+            [".summary()", ".raw", ".payload", ".help()"],
+        )
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("Result")
+
     def plot(self):
         if self.result_type != "histogram":
             raise UnsupportedOperationError(f"Plotting is not supported for result type {self.result_type!r}.")
@@ -58,6 +75,11 @@ class ModelResult(Result):
         if self.result_type != "logistic_regression":
             raise UnsupportedOperationError("Only logistic regression results can be exported to sklearn.")
         return logistic_regression_to_sklearn(self.raw, positive_class=self.positive_class)
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("ModelResult")
 
 
 def _histogram_data(raw: Any):

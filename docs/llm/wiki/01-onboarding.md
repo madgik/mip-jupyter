@@ -41,6 +41,14 @@ mmse = dm.variables["mmse"]
 
 Use `dm.variables.search("MMSE")` or `dm.datasets.search("adni")` to find codes.
 
+Objects expose `.help()` for method hints. See `docs/how-to-choose.md` (workspace `docs/`) for a goal → API decision guide.
+
+```python
+dm.help()
+dm.variables.to_frame()
+pipeline.recommend_algorithms()
+```
+
 ### 4. Create an analysis scope
 
 ```python

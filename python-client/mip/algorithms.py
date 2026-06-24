@@ -76,3 +76,13 @@ class AlgorithmRegistry:
             seen.add(key)
             matches.append(item)
         return matches
+
+    def to_frame(self):
+        from .display import to_frame
+
+        return to_frame(self.list())
+
+    def help(self) -> str:
+        from .display import show_help
+
+        return show_help("AlgorithmRegistry")
