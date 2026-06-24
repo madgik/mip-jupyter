@@ -7,6 +7,7 @@ import mip
 from mip.analysis import AnalysisSet
 from mip.catalog import Catalog
 from mip.client import Client
+from mip.display import HelpText
 from mip.pipeline import Pipeline
 from mip.results import ModelResult
 from mip.results import Result
@@ -25,7 +26,7 @@ class TestDiscoverability(unittest.TestCase):
         self.mmse = self.dm.variables["mmse"]
         self.adni = self.dm.datasets["adni"]
 
-    def test_help_returns_non_empty_string(self):
+    def test_help_returns_help_text(self):
         for obj in (
             Client("http://example/services"),
             self.catalog,
@@ -35,9 +36,10 @@ class TestDiscoverability(unittest.TestCase):
             self.dm.variables,
             self.dm.datasets,
         ):
-            text = obj.help()
-            self.assertIsInstance(text, str)
-            self.assertIn("help", text.lower())
+            help_obj = obj.help()
+            self.assertIsInstance(help_obj, HelpText)
+            self.assertIn("help", str(help_obj).lower())
+            self.assertIn("help", help_obj._repr_html_().lower())
 
     def test_repr_html_escapes_content(self):
         html = self.age._repr_html_()
@@ -84,12 +86,12 @@ class TestDiscoverability(unittest.TestCase):
 
     def test_result_help_and_repr_html(self):
         result = Result(raw={"bins": [1, 2], "counts": [3, 4]}, result_type="histogram")
-        self.assertIn("Result help", result.help())
+        self.assertIn("Result help", str(result.help()))
         self.assertIn("histogram", result._repr_html_())
 
     def test_model_result_help(self):
         result = ModelResult(raw={}, result_type="logistic_regression")
-        self.assertIn("ModelResult help", result.help())
+        self.assertIn("ModelResult help", str(result.help()))
 
     def test_analysis_set_repr_html(self):
         analysis_set = AnalysisSet(

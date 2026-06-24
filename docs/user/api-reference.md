@@ -34,7 +34,7 @@ pipeline.recommend_algorithms()
 pipeline.available_algorithms()
 ```
 
-Evaluating `DataModel`, `Variable`, `AnalysisSet`, `Pipeline`, or `Result` in a cell shows a compact HTML summary card.
+Evaluating `DataModel`, `Dataset`, `Variable`, `AnalysisSet`, `Pipeline`, or `Result` in a cell shows a compact HTML summary card.
 
 ## Filters
 

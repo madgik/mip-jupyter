@@ -109,7 +109,7 @@ dm.datasets.search("adni")
 
 ## Discoverability
 
-Notebook-facing objects expose `.help()` with useful methods and typical next steps:
+Notebook-facing objects expose `.help()` with useful methods and typical next steps. `.help()` returns a `HelpText` object with notebook-friendly `_repr_html_()` (no duplicate print + return output).
 
 ```python
 client.help()

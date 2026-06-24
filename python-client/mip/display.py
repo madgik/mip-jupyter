@@ -198,10 +198,28 @@ def format_help(kind: str) -> str:
         raise ValueError(f"No help text registered for {kind!r}") from exc
 
 
-def show_help(kind: str) -> str:
-    text = format_help(kind)
-    print(text)
-    return text
+class HelpText:
+    """Notebook-friendly help text returned by object .help() methods."""
+
+    def __init__(self, text: str):
+        self._text = text
+
+    def __str__(self) -> str:
+        return self._text
+
+    def _repr_html_(self) -> str:
+        escaped = escape_html(self._text)
+        return f"<pre style=\"white-space:pre-wrap\">{escaped}</pre>"
+
+    def _repr_pretty_(self, p, cycle) -> None:
+        if cycle:
+            p.text("HelpText(...)")
+            return
+        p.text(self._text)
+
+
+def show_help(kind: str) -> HelpText:
+    return HelpText(format_help(kind))
 
 
 def _summary_row(item: Any) -> dict[str, Any]:

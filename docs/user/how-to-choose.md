@@ -53,6 +53,8 @@ age.summary()
 age.categories()
 
 # 5. Build and preview an analysis
+adni = dm.datasets["adni"]
+mmse = dm.variables["mmse"]
 analysis_set = mip.AnalysisSet(data_model=dm, datasets=[adni], variables=[age, mmse])
 pipeline = mip.Pipeline(analysis_set=analysis_set)
 pipeline.recommend_algorithms()
