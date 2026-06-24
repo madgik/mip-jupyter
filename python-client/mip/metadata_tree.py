@@ -102,10 +102,12 @@ def render_pathology_tree(
     focus_group_path: list[str] | None = None,
 ) -> str:
     if focus_group is not None:
+        display_name = pathology.label or "<unknown>"
+        if pathology.version:
+            display_name = f"{display_name} ({pathology.version})"
         return render_group_subtree(
             focus_group,
-            model_name=pathology.name,
-            model_label=pathology.label,
+            model_display_name=display_name,
             group_path=focus_group_path,
             include_variables=include_variables,
             max_lines=max_lines,
@@ -171,8 +173,7 @@ def render_pathology_tree(
 def render_group_subtree(
     group: Any,
     *,
-    model_name: str | None = None,
-    model_label: str | None = None,
+    model_display_name: str | None = None,
     group_path: list[str] | None = None,
     include_variables: bool = True,
     max_lines: int = 250,
@@ -182,11 +183,8 @@ def render_group_subtree(
     if not path_parts:
         path_parts = [_format_name_label(_item_get(group, "code"), _item_get(group, "label"))]
     path_text = " > ".join(path_parts)
-    if model_name:
-        title = f"Metadata tree for {model_name}"
-        if model_label and model_label != model_name:
-            title += f" ({model_label})"
-        title += f" > {path_text}"
+    if model_display_name:
+        title = f"Metadata tree for {model_display_name} > {path_text}"
     else:
         title = f"Variables > {path_text}"
     writer.add(title)

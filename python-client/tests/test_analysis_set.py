@@ -38,6 +38,7 @@ class TestAnalysisSet(unittest.TestCase):
         self.assertEqual(analysis_set.summary()["data_model"], "Dementia")
         self.assertEqual(analysis_set.summary()["datasets"], ["ADNI"])
         self.assertEqual(analysis_set.summary()["variables"], ["Age"])
+        self.assertEqual(analysis_set.explain()["data_model"], "Dementia")
         self.assertEqual(analysis_set.explain()["datasets"], ["ADNI"])
 
 

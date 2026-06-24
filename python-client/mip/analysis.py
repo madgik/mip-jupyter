@@ -8,6 +8,7 @@ from typing import Sequence
 from .exceptions import MipConfigurationError
 from .display import HelpText
 from .labels import build_code_to_label_lookup
+from .labels import build_field_enumeration_lookups
 from .labels import public_label
 from .labels import sanitize_inputdata
 from .request_builder import build_inputdata
@@ -31,6 +32,12 @@ class AnalysisSet:
         lookup = build_code_to_label_lookup(self.variables, self.datasets, [self.data_model])
         lookup[self.data_model_name()] = public_label(self.data_model)
         return lookup
+
+    def _enum_lookups(self) -> dict[str, dict[str, str]]:
+        dm_variables = getattr(self.data_model, "variables", None)
+        if dm_variables is not None:
+            return build_field_enumeration_lookups(dm_variables)
+        return build_field_enumeration_lookups(self.variables)
 
     def inputdata(self, *, filters=None, extra_variables: Sequence[Any] | None = None) -> dict:
         variables = [_code(variable) for variable in self.variables]
@@ -61,7 +68,11 @@ class AnalysisSet:
         }
 
     def explain(self) -> dict[str, Any]:
-        return sanitize_inputdata(self.inputdata(), lookup=self._lookup())
+        return sanitize_inputdata(
+            self.inputdata(),
+            lookup=self._lookup(),
+            enum_lookups=self._enum_lookups(),
+        )
 
     def _repr_html_(self) -> str:
         from .display import render_object_card

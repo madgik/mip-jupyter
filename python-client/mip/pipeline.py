@@ -8,6 +8,7 @@ from typing import Sequence
 from .exceptions import MipBackendError
 from .display import HelpText
 from .labels import build_code_to_label_lookup
+from .labels import build_field_enumeration_lookups
 from .labels import public_label
 from .labels import sanitize_explain_dict
 from .request_builder import build_experiment_payload
@@ -123,14 +124,16 @@ class Pipeline:
 
     def summary(self) -> dict[str, Any]:
         lookup = self._lookup()
+        enum_lookups = self._enum_lookups()
         return sanitize_explain_dict(
             {
                 "analysis_set": self.analysis_set.summary(),
-                "filters": self._filters_payload(lookup=lookup),
+                "filters": self._filters_payload(lookup=lookup, enum_lookups=enum_lookups),
                 "preprocessing": self._preprocessing_user_summary(),
                 "new_columns": [step.summary() for step in self.new_columns],
             },
             lookup=lookup,
+            enum_lookups=enum_lookups,
         )
 
     def explain(self) -> dict[str, Any]:
@@ -226,6 +229,12 @@ class Pipeline:
         lookup[self.analysis_set.data_model_name()] = public_label(self.analysis_set.data_model)
         return lookup
 
+    def _enum_lookups(self) -> dict[str, dict[str, str]]:
+        dm_variables = getattr(self.analysis_set.data_model, "variables", None)
+        if dm_variables is not None:
+            return build_field_enumeration_lookups(dm_variables)
+        return build_field_enumeration_lookups(self.analysis_set.variables)
+
     def _preprocessing_user_summary(self) -> list[dict[str, Any]] | None:
         items: list[dict[str, Any]] = []
         for step in (self.handle_missing, self.outlier_handling):
@@ -235,11 +244,16 @@ class Pipeline:
             items.append(step.user_summary())
         return items or None
 
-    def _filters_payload(self, *, lookup: dict[str, str] | None = None):
+    def _filters_payload(
+        self,
+        *,
+        lookup: dict[str, str] | None = None,
+        enum_lookups: dict[str, dict[str, str]] | None = None,
+    ):
         if self.filters is None:
             return None
         if hasattr(self.filters, "explain"):
-            return self.filters.explain(lookup=lookup)
+            return self.filters.explain(lookup=lookup, enum_lookups=enum_lookups)
         return self.filters
 
     def _preprocessing_payload(self) -> list[dict[str, Any]] | None:

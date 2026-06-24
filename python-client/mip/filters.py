@@ -49,13 +49,18 @@ class FilterExpression:
 
     payload: dict[str, Any]
 
-    def explain(self, *, lookup: dict[str, str] | None = None) -> dict[str, Any]:
+    def explain(
+        self,
+        *,
+        lookup: dict[str, str] | None = None,
+        enum_lookups: dict[str, dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
         payload = _copy_payload(self.payload)
         if lookup is None:
             return payload
         from .labels import sanitize_filter_payload
 
-        return sanitize_filter_payload(payload, lookup)
+        return sanitize_filter_payload(payload, lookup, enum_lookups=enum_lookups)
 
     def to_payload(self) -> dict[str, Any]:
         return _copy_payload(self.payload)

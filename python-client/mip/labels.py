@@ -95,6 +95,34 @@ def build_code_to_label_lookup(*collections: Iterable[Any]) -> dict[str, str]:
     return lookup
 
 
+def _raw_enumerations(variable: Any) -> Any:
+    data = getattr(variable, "_data", None)
+    if isinstance(data, Mapping):
+        return data.get("enumerations") or data.get("enums") or []
+    return []
+
+
+def build_field_enumeration_lookups(variables: Iterable[Any]) -> dict[str, dict[str, str]]:
+    """Map variable field code to backend enum code -> human label."""
+    lookups: dict[str, dict[str, str]] = {}
+    for variable in variables:
+        field_code = internal_code(variable)
+        if not field_code:
+            continue
+        raw_enums = _raw_enumerations(variable)
+        enum_map: dict[str, str] = {}
+        if isinstance(raw_enums, Mapping):
+            for key, value in raw_enums.items():
+                label = str(value).strip() if value is not None else ""
+                enum_map[str(key)] = label or str(key)
+        elif isinstance(raw_enums, (list, tuple)):
+            for item in raw_enums:
+                enum_map[str(item)] = str(item)
+        if enum_map:
+            lookups[field_code] = enum_map
+    return lookups
+
+
 def sanitize_mapping_keys(mapping: Mapping[Any, Any] | None, lookup: Mapping[str, str]) -> dict[str, Any]:
     if not mapping:
         return {}
@@ -105,29 +133,44 @@ def sanitize_mapping_keys(mapping: Mapping[Any, Any] | None, lookup: Mapping[str
     return sanitized
 
 
-def sanitize_filter_payload(payload: Any, lookup: Mapping[str, str]) -> Any:
+def sanitize_filter_payload(
+    payload: Any,
+    lookup: Mapping[str, str],
+    *,
+    enum_lookups: Mapping[str, Mapping[str, str]] | None = None,
+) -> Any:
     if not isinstance(payload, dict):
         return payload
     if "condition" in payload:
         return {
             "condition": payload.get("condition"),
-            "rules": [sanitize_filter_payload(rule, lookup) for rule in payload.get("rules") or []],
+            "rules": [
+                sanitize_filter_payload(rule, lookup, enum_lookups=enum_lookups)
+                for rule in payload.get("rules") or []
+            ],
         }
     copied = dict(payload)
-    field = str(copied.get("field") or copied.get("id") or "")
-    if field in lookup:
-        copied["field"] = lookup[field]
-        copied["id"] = lookup[field]
+    field_code = str(copied.get("field") or copied.get("id") or "")
+    enum_map = (enum_lookups or {}).get(field_code, {})
+    if field_code in lookup:
+        copied["field"] = lookup[field_code]
+        copied["id"] = lookup[field_code]
     value = copied.get("value")
     if isinstance(value, list):
-        copied["value"] = [_sanitize_filter_value(item, lookup) for item in value]
+        copied["value"] = [_sanitize_filter_value(item, lookup, enum_map) for item in value]
     elif value is not None:
-        copied["value"] = _sanitize_filter_value(value, lookup)
+        copied["value"] = _sanitize_filter_value(value, lookup, enum_map)
     return copied
 
 
-def _sanitize_filter_value(value: Any, lookup: Mapping[str, str]) -> Any:
+def _sanitize_filter_value(
+    value: Any,
+    lookup: Mapping[str, str],
+    enum_map: Mapping[str, str] | None = None,
+) -> Any:
     text = str(value)
+    if enum_map and text in enum_map:
+        return enum_map[text]
     return lookup.get(text, value)
 
 
@@ -162,7 +205,12 @@ def _sanitize_preprocessing_dict(step: dict[str, Any], lookup: Mapping[str, str]
     return copied
 
 
-def sanitize_explain_dict(payload: dict[str, Any], *, lookup: Mapping[str, str]) -> dict[str, Any]:
+def sanitize_explain_dict(
+    payload: dict[str, Any],
+    *,
+    lookup: Mapping[str, str],
+    enum_lookups: Mapping[str, Mapping[str, str]] | None = None,
+) -> dict[str, Any]:
     sanitized: dict[str, Any] = {}
     for key, value in payload.items():
         if key == "analysis_set" and isinstance(value, dict):
@@ -172,7 +220,7 @@ def sanitize_explain_dict(payload: dict[str, Any], *, lookup: Mapping[str, str])
                 "variables": list(value.get("variables") or []),
             }
         elif key == "filters":
-            sanitized[key] = sanitize_filter_payload(value, lookup)
+            sanitized[key] = sanitize_filter_payload(value, lookup, enum_lookups=enum_lookups)
         elif key == "preprocessing":
             if isinstance(value, list):
                 sanitized[key] = [_sanitize_preprocessing_dict(item, lookup) for item in value]
@@ -185,14 +233,20 @@ def sanitize_explain_dict(payload: dict[str, Any], *, lookup: Mapping[str, str])
     return sanitized
 
 
-def sanitize_inputdata(payload: dict[str, Any], *, lookup: Mapping[str, str]) -> dict[str, Any]:
+def sanitize_inputdata(
+    payload: dict[str, Any],
+    *,
+    lookup: Mapping[str, str],
+    enum_lookups: Mapping[str, Mapping[str, str]] | None = None,
+) -> dict[str, Any]:
     datasets = payload.get("datasets") or []
     variables = payload.get("variables") or []
+    raw_model = payload.get("data_model")
     return {
-        "data_model": payload.get("data_model"),
+        "data_model": lookup.get(str(raw_model), public_label(raw_model) if raw_model else raw_model),
         "datasets": [lookup.get(str(item), str(item)) for item in datasets],
         "validation_datasets": payload.get("validation_datasets"),
-        "filters": sanitize_filter_payload(payload.get("filters"), lookup),
+        "filters": sanitize_filter_payload(payload.get("filters"), lookup, enum_lookups=enum_lookups),
         "variables": [lookup.get(str(item), str(item)) for item in variables],
     }
 
