@@ -77,6 +77,7 @@ if _use_keycloak:
     c.GenericOAuthenticator.scope = ["openid", "profile", "email", "offline_access"]
     c.GenericOAuthenticator.allow_all = True
     c.GenericOAuthenticator.manage_groups = False
+    c.GenericOAuthenticator.auto_login = _env_bool("JUPYTERHUB_AUTO_LOGIN", True)
     if _env_bool("JUPYTERHUB_OAUTH_PROMPT_NONE", False):
         c.GenericOAuthenticator.extra_authorize_params = {"prompt": "none"}
     c.GenericOAuthenticator.logout_redirect_url = _env(
