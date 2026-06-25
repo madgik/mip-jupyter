@@ -33,7 +33,15 @@ pip-wheel-metadata/
 # Notebook checkpoints
 .ipynb_checkpoints/
 
+# Local scratch and generated notebook artifacts
+scratch/
+untitled*.chat
+python-client/uv.lock
+workspace/scratch/*
+!workspace/scratch/README.md
+
 # Dev-synced copy of docs/user/ (see mip_jupyter_dev/notebook.py)
+workspace/docs
 workspace/docs/
 
 # Local env and token files

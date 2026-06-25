@@ -16,13 +16,13 @@ fi
 
 export PLATFORM_BACKEND_URL="${PLATFORM_BACKEND_URL:-http://127.0.0.1:8080/services}"
 export CODEX_VLLM_BASE_URL="${CODEX_VLLM_BASE_URL:-http://100.92.46.71:8001/v1}"
-export CODEX_VLLM_MODEL="${CODEX_VLLM_MODEL:-North-Mini-Code-1.0}"
+export CODEX_VLLM_MODEL="qwen36-nvfp4"
 export JUPYTER_HOST="${JUPYTER_HOST:-127.0.0.1}"
 export JUPYTER_PORT="${JUPYTER_PORT:-8888}"
 export JUPYTER_TOKEN="${JUPYTER_TOKEN:-dev}"
 export MIP_NOTEBOOK="${MIP_NOTEBOOK:-workspace/examples/feres_analysis.ipynb}"
 
-echo "Starting mip-jupyter with local LLM Codex (${CODEX_VLLM_MODEL})"
+echo "Starting mip-jupyter with qwen Codex (${CODEX_VLLM_MODEL})"
 echo "Codex vLLM endpoint: ${CODEX_VLLM_BASE_URL}"
 echo "Jupyter URL: http://${JUPYTER_HOST}:${JUPYTER_PORT}/lab/tree/${MIP_NOTEBOOK}?token=${JUPYTER_TOKEN}"
 

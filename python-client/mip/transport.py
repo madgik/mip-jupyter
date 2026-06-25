@@ -138,8 +138,23 @@ class Transport:
         token = (data or {}).get("access_token")
         if not token or not isinstance(token, str):
             return False
+        if self._token_is_expired(token):
+            return False
         self.set_token(token)
+        self._sync_token_env(token)
         return True
+
+    def _sync_token_env(self, token: str) -> None:
+        if os.getenv("JUPYTERHUB_API_URL") or "MIP_TOKEN" in os.environ:
+            os.environ["MIP_TOKEN"] = token
+        if "PLATFORM_TOKEN" in os.environ:
+            os.environ["PLATFORM_TOKEN"] = token
+
+    @staticmethod
+    def _token_is_expired(token: str) -> bool:
+        payload = Transport._decode_jwt_payload(token)
+        exp = payload.get("exp")
+        return isinstance(exp, (int, float)) and exp <= time.time()
 
     @staticmethod
     def _decode_jwt_payload(token: str) -> dict[str, Any]:

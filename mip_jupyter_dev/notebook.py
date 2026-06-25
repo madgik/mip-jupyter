@@ -15,6 +15,7 @@ from pathlib import Path
 from .codex_bootstrap import (
     DEFAULT_CODEX_BASE_URL,
     DEFAULT_CODEX_MODEL,
+    DEFAULT_CODEX_MODELS,
     DEFAULT_CODEX_PROVIDER,
     DEFAULT_CODEX_CONTEXT_WINDOW,
     DEFAULT_CODEX_AUTO_COMPACT_LIMIT,
@@ -111,7 +112,6 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--token", default=os.getenv("JUPYTER_TOKEN", DEFAULT_TOKEN))
     parser.add_argument("--codex-base-url", default=os.getenv("CODEX_VLLM_BASE_URL", DEFAULT_CODEX_BASE_URL))
-    parser.add_argument("--codex-model", default=os.getenv("CODEX_VLLM_MODEL", DEFAULT_CODEX_MODEL))
     parser.add_argument("--codex-provider", default=os.getenv("CODEX_VLLM_PROVIDER", DEFAULT_CODEX_PROVIDER))
     parser.add_argument(
         "--codex-context-window",
@@ -138,6 +138,20 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _codex_settings_from_args(args: argparse.Namespace) -> CodexSettings:
+    native_mcp_forwarding = args.enable_native_jupyter_mcp and not args.disable_jupyter_mcp
+    return CodexSettings(
+        base_url=args.codex_base_url,
+        model=DEFAULT_CODEX_MODEL,
+        catalog_models=DEFAULT_CODEX_MODELS,
+        provider=args.codex_provider,
+        context_window=args.codex_context_window,
+        auto_compact_limit=args.codex_auto_compact_limit,
+        mcp_port=args.mcp_port,
+        enable_native_jupyter_mcp=native_mcp_forwarding,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.mcp_port is None:
@@ -154,16 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     backend_url = env.get("PLATFORM_BACKEND_URL") or env.get("MIP_BASE_URL")
     url = f"http://{args.host}:{args.port}/lab/tree/{args.notebook}?token={args.token}"
 
-    native_mcp_forwarding = args.enable_native_jupyter_mcp and not args.disable_jupyter_mcp
-    settings = CodexSettings(
-        base_url=args.codex_base_url,
-        model=args.codex_model,
-        provider=args.codex_provider,
-        context_window=args.codex_context_window,
-        auto_compact_limit=args.codex_auto_compact_limit,
-        mcp_port=args.mcp_port,
-        enable_native_jupyter_mcp=native_mcp_forwarding,
-    )
+    settings = _codex_settings_from_args(args)
 
     with tempfile.TemporaryDirectory(prefix="mip-codex-home-") as codex_home:
         codex_home_path = Path(codex_home)
@@ -194,9 +199,10 @@ def main(argv: list[str] | None = None) -> int:
         print("Jupyter AI persona: Codex")
         print(f"CODEX_HOME={codex_home}")
         print(f"Codex model: {settings.model}")
+        print(f"Codex catalog models: {', '.join(settings.catalog_models)}")
         print(f"Codex provider: {settings.provider}")
         print(f"Codex base_url: {settings.base_url}")
-        mcp_forwarding = "native" if native_mcp_forwarding else "shell bridge"
+        mcp_forwarding = "native" if settings.enable_native_jupyter_mcp else "shell bridge"
         print(f"Codex model catalog: {codex_home_path / 'model-catalog.json'}")
         if wrapper_bin is not None:
             print(f"Codex ACP wrapper: {wrapper_bin / 'codex-acp'}")

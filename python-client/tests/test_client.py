@@ -1,4 +1,7 @@
+import base64
+import json
 import os
+import time
 import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
@@ -7,6 +10,14 @@ from mip import Client
 from mip.exceptions import MipBackendError
 from mip.exceptions import MipConfigurationError
 from mip.transport import Transport
+
+
+def _make_jwt(exp: int) -> str:
+    header = base64.urlsafe_b64encode(b'{"alg":"none"}').decode("utf-8").rstrip("=")
+    payload = base64.urlsafe_b64encode(
+        json.dumps({"exp": exp}).encode("utf-8")
+    ).decode("utf-8").rstrip("=")
+    return f"{header}.{payload}.signature"
 
 
 class TestClient(unittest.TestCase):
@@ -104,6 +115,52 @@ class TestTransport(unittest.TestCase):
         transport = Transport("http://backend/services")
         with self.assertRaises(MipBackendError):
             transport.get("/data-models")
+
+    @patch("mip.transport.requests.get")
+    @patch("mip.transport.requests.Session")
+    def test_refresh_token_via_jupyterhub_updates_token_and_env(self, session_cls, get_mock):
+        expired = _make_jwt(int(time.time()) - 60)
+        refreshed = _make_jwt(int(time.time()) + 3600)
+        refresh_response = MagicMock()
+        refresh_response.status_code = 200
+        refresh_response.content = b'{"access_token":"' + refreshed.encode() + b'"}'
+        refresh_response.json.return_value = {"access_token": refreshed}
+        get_mock.return_value = refresh_response
+
+        backend_response = MagicMock()
+        backend_response.status_code = 200
+        backend_response.content = b'{"ok": true}'
+        backend_response.json.return_value = {"ok": True}
+        session_cls.return_value.request.return_value = backend_response
+
+        env = {
+            "JUPYTERHUB_API_URL": "http://jupyterhub:8081/notebook/hub/api",
+            "JUPYTERHUB_API_TOKEN": "hub-token",
+            "MIP_TOKEN": expired,
+        }
+        with patch.dict(os.environ, env, clear=True):
+            transport = Transport("http://backend/services", token=expired)
+            payload = transport.get("/data-models")
+
+            self.assertEqual(payload, {"ok": True})
+            self.assertEqual(transport.token, refreshed)
+            self.assertEqual(os.environ["MIP_TOKEN"], refreshed)
+
+    @patch("mip.transport.requests.get")
+    @patch("mip.transport.requests.Session")
+    def test_expired_token_without_refresh_raises(self, session_cls, get_mock):
+        expired = _make_jwt(int(time.time()) - 60)
+        get_mock.return_value = MagicMock(status_code=401, content=b"", json=lambda: {})
+
+        env = {
+            "JUPYTERHUB_API_URL": "http://jupyterhub:8081/notebook/hub/api",
+            "JUPYTERHUB_API_TOKEN": "hub-token",
+            "MIP_TOKEN": expired,
+        }
+        with patch.dict(os.environ, env, clear=True):
+            transport = Transport("http://backend/services", token=expired)
+            with self.assertRaises(MipBackendError):
+                transport.get("/data-models")
 
 
 if __name__ == "__main__":

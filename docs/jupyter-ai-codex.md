@@ -1,8 +1,8 @@
 # Jupyter AI Codex Prototype
 
-This prototype adds Jupyter AI to the local JupyterLab workflow so developers can test a Codex-backed assistant. The repository does not include personal credentials, ChatGPT session files, OpenAI API keys, or tokens.
+This prototype adds Jupyter AI to the local JupyterLab workflow so developers can test a qwen-backed Codex assistant. The repository does not include personal credentials or tokens.
 
-Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Codex at the North vLLM OpenAI-compatible `/v1/responses` endpoint.
+Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Codex at the North vLLM Responses-compatible `/v1/responses` endpoint and the `qwen36-nvfp4` model.
 
 References:
 
@@ -39,14 +39,14 @@ Install the Codex ACP adapter required by Jupyter AI:
 npm install -g @zed-industries/codex-acp
 ```
 
-The local North vLLM provider does not require `codex login` or an OpenAI API key. The runner sets `CODEX_HOME` to a temporary directory containing `config.toml` and `model-catalog.json`:
+The qwen Codex workflow uses a temporary `CODEX_HOME` containing `config.toml` and `model-catalog.json`:
 
 ```toml
-model = "North-Mini-Code-1.0"
+model = "qwen36-nvfp4"
 model_provider = "north_vllm"
 model_catalog_json = "/tmp/mip-codex-home-.../model-catalog.json"
-model_context_window = 131072
-model_auto_compact_token_limit = 100000
+model_context_window = 32768
+model_auto_compact_token_limit = 28000
 model_reasoning_effort = "minimal"
 model_reasoning_summary = "none"
 model_supports_reasoning_summaries = false
@@ -64,7 +64,7 @@ base_url = "http://100.92.46.71:8001/v1"
 wire_api = "responses"
 ```
 
-The generated model catalog adds explicit metadata for `North-Mini-Code-1.0`, including the 131072-token context window. It intentionally keeps the Responses payload compatible with the current vLLM shim by setting `support_verbosity` to `false`, `apply_patch_tool_type` to `null`, `supports_parallel_tool_calls` to `false`, and `use_responses_lite` to `true`.
+The generated model catalog contains only `qwen36-nvfp4` with a 32768-token context window. Catalog metadata intentionally keeps the Responses payload compatible with the current vLLM shim by setting `support_verbosity` to `false`, `apply_patch_tool_type` to `null`, `supports_parallel_tool_calls` to `false`, and `use_responses_lite` to `true`.
 
 The runner also prepends a generated `codex-acp` wrapper to `PATH`. The wrapper passes `-c approval_policy="never"`, `-c sandbox_mode="danger-full-access"`, and `-c shell_environment_policy.inherit="all"` directly to `codex-acp`; this is needed because the ACP process otherwise starts Codex with `on-request` approvals and a read-only sandbox even when the temporary `config.toml` contains the desired values.
 
@@ -81,7 +81,7 @@ The bridge still calls the Jupyter MCP server; it just avoids sending a native R
 
 Restart JupyterLab after installing or changing agent binaries so Jupyter AI can rediscover available agents.
 
-To use a different endpoint for local testing:
+To use a different qwen vLLM endpoint for local testing:
 
 ```bash
 CODEX_VLLM_BASE_URL=http://127.0.0.1:8001/v1 uv run mip-notebook
@@ -99,7 +99,7 @@ For parallel local JupyterLab instances, use a different JupyterLab port. The ru
 JUPYTER_PORT=8892 uv run mip-notebook
 ```
 
-## Check the North vLLM Endpoint
+## Check the vLLM Endpoint
 
 From a machine connected to the same Tailscale network:
 
@@ -107,19 +107,23 @@ From a machine connected to the same Tailscale network:
 curl http://100.92.46.71:8001/v1/models
 ```
 
-Expected model ID:
+Expected model IDs include:
 
 ```text
-North-Mini-Code-1.0
+qwen36-nvfp4
 ```
+
+The local and Hub runners use `qwen36-nvfp4`.
 
 The endpoint must support the Responses API path used by Codex:
 
 ```bash
 curl http://100.92.46.71:8001/v1/responses \
   -H 'Content-Type: application/json' \
-  -d '{"model":"North-Mini-Code-1.0","input":"Say OK","max_output_tokens":128}'
+  -d '{"model":"qwen36-nvfp4","input":"Say OK only","max_output_tokens":256}'
 ```
+
+`qwen36-nvfp4` may emit reasoning tokens before the final message; use a large enough `max_output_tokens` value in manual curl tests.
 
 ## Agent Onboarding
 
@@ -167,7 +171,7 @@ This prototype is a local development workflow. Do not treat it as a production 
 
 Before enabling AI agents in shared Hub environments, review:
 
-- where user credentials and Codex auth caches are stored if non-local providers are enabled
+- where temporary Codex runtime state is stored
 - whether agents can read other users' files or mounted secrets
 - command execution and approval behavior
 - network egress and model-provider policy

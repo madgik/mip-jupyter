@@ -16,7 +16,16 @@ def build_config(*, mcp_port: int | None = None) -> dict:
     }
     if mcp_port is not None:
         extension_config["mcp_port"] = mcp_port
-    return {"MCPExtensionApp": extension_config}
+    return {
+        "MCPExtensionApp": extension_config,
+        # RTC sync can leave cells stuck on [*] behind Hub/nginx proxies.
+        "YDocExtension": {"disable_rtc": True},
+        # Keep kernel websocket pings within nginx/proxy limits (see ServerApp warning).
+        "ServerApp": {
+            "websocket_ping_interval": 30000,
+            "websocket_ping_timeout": 30000,
+        },
+    }
 
 
 def _parser() -> argparse.ArgumentParser:

@@ -1831,11 +1831,14 @@ dependencies = [
 notebook = [
     { name = "ipython", version = "8.39.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "ipython", version = "9.14.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "matplotlib", version = "3.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "ipython", marker = "extra == 'notebook'", specifier = ">=8.0.0,<10.0.0" },
+    { name = "matplotlib", marker = "extra == 'notebook'", specifier = ">=3.7.0,<4.0.0" },
     { name = "numpy", specifier = ">=1.21.0,<3.0.0" },
     { name = "pandas", specifier = ">=1.0.0,<4.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0,<9.0.0" },
