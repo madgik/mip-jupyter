@@ -2,7 +2,9 @@
 
 This prototype adds Jupyter AI to the local JupyterLab workflow so developers can test a qwen-backed Codex assistant. The repository does not include personal credentials or tokens.
 
-Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Codex at the North vLLM Responses-compatible `/v1/responses` endpoint and the `qwen36-nvfp4` model.
+Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Cohort Scout at a qwen vLLM Responses-compatible `/v1/responses` endpoint and the `qwen36-nvfp4` model.
+
+Architecture overview and Mermaid source: [jupyter-ai-architecture.md](jupyter-ai-architecture.md).
 
 References:
 
@@ -43,7 +45,7 @@ The qwen Codex workflow uses a temporary `CODEX_HOME` containing `config.toml` a
 
 ```toml
 model = "qwen36-nvfp4"
-model_provider = "north_vllm"
+model_provider = "qwen_vllm"
 model_catalog_json = "/tmp/mip-codex-home-.../model-catalog.json"
 model_context_window = 32768
 model_auto_compact_token_limit = 28000
@@ -58,8 +60,8 @@ web_search = "disabled"
 [features]
 multi_agent = false
 
-[model_providers.north_vllm]
-name = "North vLLM"
+[model_providers.qwen_vllm]
+name = "qwen vLLM"
 base_url = "http://100.92.46.71:8001/v1"
 wire_api = "responses"
 ```
@@ -68,7 +70,7 @@ The generated model catalog contains only `qwen36-nvfp4` with a 32768-token cont
 
 The runner also prepends a generated `codex-acp` wrapper to `PATH`. The wrapper passes `-c approval_policy="never"`, `-c sandbox_mode="danger-full-access"`, and `-c shell_environment_policy.inherit="all"` directly to `codex-acp`; this is needed because the ACP process otherwise starts Codex with `on-request` approvals and a read-only sandbox even when the temporary `config.toml` contains the desired values.
 
-The runner starts a curated Jupyter MCP wrapper server by default. It does not forward that server as native Responses `mcp` tools to Codex when using North vLLM, because the current vLLM Responses shim rejects native `mcp` and `web_search_preview` tool payloads with `Object of type Undefined is not JSON serializable`.
+The runner starts a curated Jupyter MCP wrapper server by default. It does not forward that server as native Responses `mcp` tools to Codex when using qwen vLLM, because the current vLLM Responses shim rejects native `mcp` and `web_search_preview` tool payloads with `Object of type Undefined is not JSON serializable`.
 
 Instead, Codex receives `JUPYTER_MCP_URL` and model instructions to call the MCP server through the shell bridge:
 
@@ -77,7 +79,7 @@ python -m mip_jupyter_dev.jupyter_mcp_cli create-notebook scratch/mcp_probe.ipyn
 python -m mip_jupyter_dev.jupyter_mcp_cli append-markdown scratch/mcp_probe.ipynb "MCP OK"
 ```
 
-The bridge still calls the Jupyter MCP server; it just avoids sending a native Responses `mcp` tool type to North vLLM. Native MCP forwarding can be enabled with `CODEX_ENABLE_NATIVE_JUPYTER_MCP=1` only for providers that support Responses MCP tools.
+The bridge still calls the Jupyter MCP server; it just avoids sending a native Responses `mcp` tool type to qwen vLLM. Native MCP forwarding can be enabled with `CODEX_ENABLE_NATIVE_JUPYTER_MCP=1` only for providers that support Responses MCP tools.
 
 Restart JupyterLab after installing or changing agent binaries so Jupyter AI can rediscover available agents.
 
@@ -87,7 +89,7 @@ To use a different qwen vLLM endpoint for local testing:
 CODEX_VLLM_BASE_URL=http://127.0.0.1:8001/v1 uv run mip-notebook
 ```
 
-If the shell bridge regresses, native MCP forwarding should remain disabled for North vLLM. Verify the MCP server directly with:
+If the shell bridge regresses, native MCP forwarding should remain disabled for qwen vLLM. Verify the MCP server directly with:
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli notebook-outline workspace/examples/feres_analysis.ipynb
@@ -99,7 +101,7 @@ For parallel local JupyterLab instances, use a different JupyterLab port. The ru
 JUPYTER_PORT=8892 uv run mip-notebook
 ```
 
-## Check the vLLM Endpoint
+## Check the qwen vLLM endpoint
 
 From a machine connected to the same Tailscale network:
 
@@ -142,28 +144,28 @@ The production single-user image seeds `workspace/` and `docs/user/` into `/home
 
 1. Open JupyterLab.
 2. Open the chat panel from the left sidebar, or create a chat from the launcher.
-3. Type `@` in the chat input and verify that Codex appears in the persona menu.
+3. Type `@` in the chat input and verify that **Cohort Scout** appears in the persona menu.
 4. Use one of the existing notebooks as context, for example `workspace/examples/feres_analysis.ipynb` or `workspace/Welcome.ipynb`.
 5. Send one of these prompts:
 
 ```text
-@Codex explain the structure of this workspace.
-@Codex inspect workspace/Welcome.ipynb and summarize what a new MIP user should do first.
-@Codex explain how mip.Client.from_env() gets configuration.
-@Codex create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK.
+@Cohort Scout explain the structure of this workspace.
+@Cohort Scout inspect workspace/Welcome.ipynb and summarize what a new MIP user should do first.
+@Cohort Scout explain how mip.Client.from_env() gets configuration.
+@Cohort Scout create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK.
 ```
 
-The current prototype is considered successful if the Jupyter AI chat UI opens, Codex appears after the runtime agent setup, Codex can answer against an existing notebook or workspace file, and Codex can use the Jupyter MCP shell bridge to create or edit a notebook without any credentials committed to the repository.
+The current prototype is considered successful if the Jupyter AI chat UI opens, Cohort Scout appears after the runtime agent setup, it can answer against an existing notebook or workspace file, and it can use the Jupyter MCP shell bridge to create or edit a notebook without any credentials committed to the repository.
 
 ### Golden prompts (context efficiency)
 
-Use these prompts to verify that Codex follows the wiki instead of grepping the full repo. Success means a correct answer with **at most three targeted file reads** before replying (no broad `find` or repo-wide `grep` on startup).
+Use these prompts to verify that Cohort Scout follows the wiki instead of grepping the full repo. Success means a correct answer with **at most three targeted file reads** before replying (no broad `find` or repo-wide `grep` on startup).
 
 | Prompt | Expected reads |
 |--------|----------------|
-| `@Codex explain how mip.Client.from_env() gets configuration` | `docs/llm/wiki/05-env-and-backend.md` or `python-client/mip/client.py` |
-| `@Codex summarize what a new MIP user should do first` | `docs/llm/wiki/01-onboarding.md` and optionally `workspace/Welcome.ipynb` |
-| `@Codex create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK` | MCP CLI only per `docs/llm/wiki/04-jupyter-mcp.md` |
+| `@Cohort Scout explain how mip.Client.from_env() gets configuration` | `docs/llm/wiki/05-env-and-backend.md` or `python-client/mip/client.py` |
+| `@Cohort Scout summarize what a new MIP user should do first` | `docs/llm/wiki/01-onboarding.md` and optionally `workspace/Welcome.ipynb` |
+| `@Cohort Scout create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK` | MCP CLI only per `docs/llm/wiki/04-jupyter-mcp.md` |
 
 ## Production Notes
 

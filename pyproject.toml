@@ -17,6 +17,9 @@ dependencies = [
 mip-notebook = "mip_jupyter_dev.notebook:main"
 mip-jupyter-mcp = "mip_jupyter_dev.jupyter_mcp_cli:main"
 
+[project.entry-points."jupyter_ai.personas"]
+cohort-scout = "mip_jupyter_dev.mip_acp_persona:CohortScoutPersona"
+
 [tool.uv.sources]
 mip = { path = "python-client", editable = true }
 

@@ -23,6 +23,7 @@ from .codex_bootstrap import (
     CodexSettings,
     bootstrap_codex,
 )
+from .mip_acp_persona import MIP_PERSONA_NAME
 
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:8080/services"
@@ -127,13 +128,13 @@ def _parser() -> argparse.ArgumentParser:
         "--disable-jupyter-mcp",
         action="store_true",
         default=_env_flag("CODEX_DISABLE_NATIVE_JUPYTER_MCP"),
-        help="Disable native MCP forwarding to Codex. This is the default for North vLLM.",
+        help="Disable native MCP forwarding to Codex. This is the default for qwen vLLM.",
     )
     parser.add_argument(
         "--enable-native-jupyter-mcp",
         action="store_true",
         default=_env_flag("CODEX_ENABLE_NATIVE_JUPYTER_MCP"),
-        help="Forward Jupyter MCP as native Responses MCP tools. Do not use with North vLLM.",
+        help="Forward Jupyter MCP as native Responses MCP tools. Do not use with qwen vLLM.",
     )
     return parser
 
@@ -195,8 +196,8 @@ def main(argv: list[str] | None = None) -> int:
         ]
 
         print(f"JupyterLab URL: {url}")
-        print(f"PLATFORM_BACKEND_URL={backend_url}")
-        print("Jupyter AI persona: Codex")
+        print("MIP platform connection: configured")
+        print(f"Jupyter AI persona: {MIP_PERSONA_NAME}")
         print(f"CODEX_HOME={codex_home}")
         print(f"Codex model: {settings.model}")
         print(f"Codex catalog models: {', '.join(settings.catalog_models)}")

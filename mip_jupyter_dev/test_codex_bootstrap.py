@@ -11,11 +11,15 @@ from mip_jupyter_dev import notebook as notebook_runner
 from mip_jupyter_dev.codex_bootstrap import (
     DEFAULT_CODEX_MODEL,
     DEFAULT_CODEX_MODELS,
+    DEFAULT_CODEX_PERSONA_ID,
+    SCOPE_RULES,
     CodexSettings,
     bootstrap_codex,
     write_codex_config,
     write_codex_model_catalog,
 )
+from mip_jupyter_dev.mip_acp_persona import MIP_PERSONA_ID
+from mip_jupyter_dev.mip_acp_persona import MIP_PERSONA_NAME
 
 
 @pytest.fixture(autouse=True)
@@ -59,6 +63,8 @@ def test_model_catalog_contains_qwen_model_only(tmp_path: Path) -> None:
 
     qwen = catalog["models"][0]
     assert qwen["context_window"] == 32768
+    assert "recipes" in qwen["base_instructions"]
+    assert SCOPE_RULES in qwen["base_instructions"]
 
 
 def test_config_toml_uses_default_qwen_model(tmp_path: Path) -> None:
@@ -94,6 +100,11 @@ def test_notebook_cli_context_overrides_are_used() -> None:
     assert settings.auto_compact_limit == 3500
 
 
+def test_default_persona_is_cohort_scout() -> None:
+    assert DEFAULT_CODEX_PERSONA_ID == MIP_PERSONA_ID
+    assert MIP_PERSONA_NAME == "Cohort Scout"
+
+
 def test_bootstrap_codex_writes_catalog_and_config(tmp_path: Path) -> None:
     settings = CodexSettings.from_env()
     codex_home = tmp_path / "codex-home"
@@ -104,5 +115,8 @@ def test_bootstrap_codex_writes_catalog_and_config(tmp_path: Path) -> None:
     catalog = json.loads((codex_home / "model-catalog.json").read_text(encoding="utf-8"))
     assert len(catalog["models"]) == 1
     assert catalog["models"][0]["slug"] == "qwen36-nvfp4"
+    assert MIP_PERSONA_NAME in catalog["models"][0]["base_instructions"]
     assert (codex_home / "config.toml").is_file()
+    jupyter_config_data = json.loads(jupyter_config.read_text(encoding="utf-8"))
+    assert jupyter_config_data["PersonaManager"]["default_persona_id"] == MIP_PERSONA_ID
     assert jupyter_config.is_file()

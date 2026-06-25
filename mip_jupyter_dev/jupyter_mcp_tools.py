@@ -530,32 +530,22 @@ async def open_file(path: str) -> dict[str, Any]:
 
 
 async def mip_env_status() -> dict[str, Any]:
-    """Report MIP backend configuration presence without exposing secrets."""
+    """Report whether the MIP platform connection is configured (no secrets or env names)."""
 
-    backend_source = None
-    for name in ("PLATFORM_BACKEND_URL", "MIP_BASE_URL"):
-        if os.getenv(name):
-            backend_source = name
-            break
+    backend_configured = any(os.getenv(name) for name in ("PLATFORM_BACKEND_URL", "MIP_BASE_URL"))
 
-    token_source = None
-    for name in ("PLATFORM_TOKEN", "MIP_TOKEN"):
-        if os.getenv(name):
-            token_source = name
-            break
-    if token_source is None:
-        for token_file in (_workspace_root() / "mip_token", _workspace_root() / ".mip_token"):
-            if token_file.is_file() and token_file.stat().st_size > 0:
-                token_source = token_file.name
-                break
+    token_configured = any(os.getenv(name) for name in ("PLATFORM_TOKEN", "MIP_TOKEN"))
+    if not token_configured:
+        token_configured = any(
+            token_file.is_file() and token_file.stat().st_size > 0
+            for token_file in (_workspace_root() / "mip_token", _workspace_root() / ".mip_token")
+        )
 
     return {
         "ok": True,
-        "backend_url_present": backend_source is not None,
-        "backend_url_source": backend_source,
-        "token_present": token_source is not None,
-        "token_source": token_source,
-        "timeout_present": os.getenv("PLATFORM_BACKEND_TIMEOUT") is not None,
+        "connection_configured": backend_configured,
+        "authenticated": token_configured,
+        "ready": backend_configured and token_configured,
     }
 
 
@@ -570,7 +560,7 @@ def _tool_error(exc: Exception) -> dict[str, Any]:
 
 
 async def mip_catalog_summary(limit: int = 20) -> dict[str, Any]:
-    """Return compact authorized data-model summaries from platform-backend."""
+    """Return compact authorized data-model summaries from the MIP platform."""
 
     limit = _limit(limit, 20, MAX_LIST_ITEMS)
     try:
@@ -638,7 +628,7 @@ async def mip_search_variables(
 
 
 async def mip_algorithm_summary() -> dict[str, Any]:
-    """Return compact algorithm summaries from platform-backend."""
+    """Return compact algorithm summaries from the MIP platform."""
 
     try:
         algorithms = _mip_client().algorithms().list()

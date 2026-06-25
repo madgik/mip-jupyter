@@ -12,23 +12,57 @@ from pathlib import Path
 
 from .jupyter_mcp_config import build_config as build_mcp_config
 from .jupyter_mcp_tools import SAFE_JUPYTER_MCP_TOOLS
+from .mip_acp_persona import MIP_PERSONA_ID
+from .mip_acp_persona import MIP_PERSONA_NAME
 
 DEFAULT_CODEX_BASE_URL = "http://100.92.46.71:8001/v1"
 DEFAULT_CODEX_MODEL = "qwen36-nvfp4"
 DEFAULT_CODEX_MODELS = (DEFAULT_CODEX_MODEL,)
-DEFAULT_CODEX_PROVIDER = "north_vllm"
+DEFAULT_CODEX_PROVIDER = "qwen_vllm"
 DEFAULT_CODEX_CONTEXT_WINDOW = 32768
 DEFAULT_CODEX_AUTO_COMPACT_LIMIT = 28000
-DEFAULT_CODEX_PERSONA_ID = "jupyter-ai-personas::jupyter_ai_acp_client::CodexAcpPersona"
+DEFAULT_CODEX_PERSONA_ID = MIP_PERSONA_ID
 DEFAULT_MCP_PORT = 3001
 
+MIP_CONTEXT = (
+    "MIP (Medical Informatics Platform) is a federated clinical research platform. "
+    "Hospital sites keep patient data locally; the platform coordinates analyses "
+    "across sites without centralizing raw records. Users work in Jupyter with the "
+    "pre-installed mip Python client to discover data models, variables, and "
+    "algorithms, then build cohorts and run federated analyses via AnalysisSet "
+    "and Pipeline."
+)
+
+USER_FACING_RULES = (
+    "Use plain language with end users: say 'the MIP platform', 'your connection', "
+    "'catalog', or 'analysis run'. Do not mention /services, internal URLs, "
+    "Exaflow, worker infrastructure, env var names, or deployment details unless "
+    "the user explicitly asks about developer or operator setup. "
+    "For connection issues, point to Welcome.ipynb, docs/troubleshooting.md, or "
+    "their platform administrator."
+)
+
+SCOPE_RULES = (
+    "Stay in scope: MIP JupyterLab, federated clinical and medical research notebooks, "
+    "the mip Python client, cohort and pipeline analysis, workspace docs, and Python "
+    "coding that supports those notebooks. "
+    "If the user asks about anything else (recipes, trivia, entertainment, unrelated "
+    "projects, personal life advice, or general web knowledge), do not answer that "
+    "question and do not call tools for it. Reply in one or two sentences that you "
+    "are Cohort Scout for MIP notebook work only, then say what you can help with: "
+    "catalog discovery, filters, pipelines, notebook edits, and workspace troubleshooting. "
+    "Do not give personal medical advice or invent catalog data."
+)
+
 BASE_INSTRUCTIONS = (
-    "You are Codex in JupyterLab for MIP analysis users. Start with agent_read_guide, "
-    "then agent_search_docs for user help in docs/. Agent wiki lives outside the user "
-    "workspace at MIP_AGENT_DOCS (not for end users). Use notebook_outline before "
-    "notebook_read_cell, keep notebook work under scratch/ unless the user names "
-    "another path, and use mip.Client.from_env() through the curated MIP metadata "
-    "tools. Never call Exaflow directly, dump tokens, or use broad filesystem reads. "
+    f"You are {MIP_PERSONA_NAME} in JupyterLab for MIP analysis users. {MIP_CONTEXT} "
+    f"{SCOPE_RULES} "
+    f"{USER_FACING_RULES} "
+    "Start with agent_read_guide, then agent_search_docs for user help in docs/. "
+    "Agent wiki lives outside the user workspace at MIP_AGENT_DOCS (not for end users). "
+    "Use notebook_outline before notebook_read_cell, keep notebook work under scratch/ "
+    "unless the user names another path, and use mip.Client.from_env() through the "
+    "curated MIP metadata tools. Never dump tokens or use broad filesystem reads. "
     "If native MCP is unavailable, call the same tools through "
     "python -m mip_jupyter_dev.jupyter_mcp_cli; JUPYTER_MCP_URL is set."
 )
@@ -208,7 +242,7 @@ def write_codex_config(path: Path, settings: CodexSettings, model_catalog_path: 
         "[features]\n"
         "multi_agent = false\n\n"
         f"[model_providers.{provider}]\n"
-        'name = "North vLLM"\n'
+        'name = "qwen vLLM"\n'
         f'base_url = "{settings.base_url}"\n'
         'wire_api = "responses"\n'
     )
