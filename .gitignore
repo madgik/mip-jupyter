@@ -40,6 +40,10 @@ python-client/uv.lock
 workspace/scratch/*
 !workspace/scratch/README.md
 
+# LLM runtime state
+.llm/chats/*
+!.llm/chats/.gitkeep
+
 # Dev-synced copy of docs/user/ (see mip_jupyter_dev/notebook.py)
 workspace/docs
 workspace/docs/
