@@ -1,8 +1,6 @@
 # MIP Python Client — API Reference
 
-Thin client over platform-backend. Notebooks never call Exaflow directly.
-
-Public selection and display use **labels** only. Internal codes are serialized automatically in backend payloads.
+The `mip` client runs federated analyses on the MIP platform. Use **labels** in notebook code; internal codes are handled automatically.
 
 ## Imports
 
@@ -48,7 +46,7 @@ expr1 | expr2
 ~F(x).isin([...])  # rewrites to not_in
 ```
 
-String-match operators (`contains`, `starts_with`, `ends_with`) may not be accepted by the backend validator.
+String-match operators (`contains`, `starts_with`, `ends_with`) may not be available for every variable type.
 
 ## Preprocessing
 

@@ -4,9 +4,11 @@
 
 **Skip if:** The user only asks about MIP analysis API (see `03-mip-client-api.md`).
 
+Off-topic requests (recipes, trivia, unrelated projects) are out of scope — see `00-agent-workspace.md`. Do not call MCP tools for them.
+
 ## Why the shell bridge
 
-North vLLM rejects native Responses `mcp` tool payloads. Codex calls the same curated Jupyter MCP tools through:
+qwen36-nvfp4 rejects native Responses `mcp` tool payloads on qwen vLLM. Codex calls the same curated Jupyter MCP tools through:
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli <command> ...
@@ -56,7 +58,7 @@ python -m mip_jupyter_dev.jupyter_mcp_cli mip-search-variables stroke "NIHSS" --
 python -m mip_jupyter_dev.jupyter_mcp_cli mip-algorithm-summary
 ```
 
-These commands use `mip.Client.from_env()` and platform-backend metadata only. They never print token values.
+These commands use `mip.Client.from_env()` and MIP platform metadata only. They never print token values.
 
 ## Workflow
 

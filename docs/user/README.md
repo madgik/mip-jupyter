@@ -1,6 +1,6 @@
 # MIP Jupyter — User Documentation
 
-Welcome to the Medical Informatics Platform (MIP) Jupyter workspace. The `mip` Python client is pre-installed and talks to platform-backend under `/services`.
+Welcome to the Medical Informatics Platform (MIP) Jupyter workspace. The `mip` Python client is pre-installed and connects to the platform automatically when you launch notebooks from the MIP portal.
 
 **Start here:** open [`Welcome.ipynb`](../Welcome.ipynb) and run all cells. Jupyter opens that notebook by default when you log in.
 
@@ -19,7 +19,7 @@ Welcome to the Medical Informatics Platform (MIP) Jupyter workspace. The `mip` P
 - [How to choose the right API call](how-to-choose.md) — goal → method decision guide
 - [API reference](api-reference.md) — filters, preprocessing, pipeline methods, results
 - [Workspace guide](workspace-guide.md) — where to save work, examples vs scratch, kernel tips
-- [Troubleshooting](troubleshooting.md) — connection, import, and backend errors
+- [Troubleshooting](troubleshooting.md) — connection and analysis errors
 
 ## Typical workflow
 
@@ -28,8 +28,8 @@ Welcome to the Medical Informatics Platform (MIP) Jupyter workspace. The `mip` P
 3. Copy an example into `scratch/` if you want to adapt it.
 4. Build an `AnalysisSet` and `Pipeline`, then call algorithm methods directly on the pipeline.
 
-## Authentication
+## Connection
 
-When you open notebooks from the Platform UI, `PLATFORM_BACKEND_URL` and `MIP_TOKEN` are injected automatically. For local development, set those environment variables before starting Jupyter.
+When you open notebooks from the MIP portal, authentication and platform access are configured for you.
 
-See [Troubleshooting](troubleshooting.md) if `Client.from_env()` fails.
+See [Troubleshooting](troubleshooting.md) if `Client.from_env()` fails, or contact your platform administrator.

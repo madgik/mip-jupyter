@@ -1,6 +1,6 @@
 # MIP Python Client — Quickstart
 
-The `mip` package is pre-installed in this Jupyter environment. Use it to run federated analysis through platform-backend.
+The `mip` package is pre-installed in this Jupyter environment. Use it to run federated analysis on the MIP platform.
 
 ## Connect
 
@@ -11,10 +11,7 @@ client = mip.Client.from_env()
 catalog = client.catalog()
 ```
 
-`Client.from_env()` reads:
-
-- `PLATFORM_BACKEND_URL` or `MIP_BASE_URL` — backend base URL (for example `http://platform-backend:8080/services`)
-- `MIP_TOKEN` or `PLATFORM_TOKEN` — bearer token for platform-backend
+When you launch Jupyter from the MIP portal, `Client.from_env()` picks up your platform connection automatically. No manual setup is required.
 
 ## Discover data
 

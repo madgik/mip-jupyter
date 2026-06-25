@@ -17,7 +17,7 @@
 | `examples/` | Reference notebooks shipped with the platform. Read and learn from them. Copy into `scratch/` before making changes. |
 | `scratch/` | Your own analysis work. Safe to create, edit, and delete freely. |
 
-When an AI assistant creates a notebook without a path, it should default to `scratch/`.
+Create new notebooks in `scratch/` unless your team has a different shared location.
 
 ## Saving and organizing work
 
@@ -27,14 +27,14 @@ When an AI assistant creates a notebook without a path, it should default to `sc
 
 ## Kernel tips
 
-- **Restart kernel** after environment variable changes or package updates.
+- **Restart kernel** after signing in again or when your administrator updates the workspace image.
 - **Run All** from the top when you change filters, variables, or preprocessing — downstream cells depend on earlier definitions.
-- Large analyses can take time; each pipeline algorithm call is a round-trip to platform-backend.
+- Large federated analyses can take time to complete.
 
 ## What is not in this workspace
 
-- `mip` Python client source (`python-client/`) — installed as a package, not editable here.
-- Deployment configuration — managed by your platform operator via `mip/deployment`.
+- `mip` Python client source — installed as a package, not editable here.
+- Platform deployment settings — managed by your operator.
 
 ## Related docs
 

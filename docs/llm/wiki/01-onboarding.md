@@ -6,7 +6,7 @@
 
 ## Goal
 
-Connect to platform-backend, discover a data model, select datasets and variables, run a simple analysis.
+Connect to the MIP platform, discover a data model, select datasets and variables, run a simple analysis.
 
 ## Steps
 
@@ -19,7 +19,7 @@ client = mip.Client.from_env()
 catalog = client.catalog()
 ```
 
-`Client.from_env()` reads `PLATFORM_BACKEND_URL` (or `MIP_BASE_URL`) and `MIP_TOKEN` (or `PLATFORM_TOKEN`). See `05-env-and-backend.md` for details.
+`Client.from_env()` uses the platform connection configured when the user opens Jupyter from the MIP portal. See `05-env-and-backend.md` for operator and developer env details — do not quote env var names to end users unless they ask about local development setup.
 
 ### 2. Discover data models
 
@@ -77,7 +77,7 @@ Run cells in `workspace/Welcome.ipynb` for the full getting-started walkthrough.
 
 ## Rules
 
-- No direct Exaflow calls — all HTTP goes through platform-backend.
+- No direct calls to internal execution services — use the `mip` client and platform APIs only.
 - No `.table()` API — it does not exist.
 - Select and read **labels** only; internal codes are never shown in notebook code.
 
