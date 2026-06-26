@@ -73,6 +73,7 @@ def test_model_catalog_contains_qwen_model_only(tmp_path: Path) -> None:
     assert qwen["context_window"] == 32768
     assert "recipes" in qwen["base_instructions"]
     assert SCOPE_RULES in qwen["base_instructions"]
+    assert "first make the step sequence work in plain Python" in qwen["base_instructions"]
 
 
 def test_config_toml_uses_default_qwen_model(tmp_path: Path) -> None:

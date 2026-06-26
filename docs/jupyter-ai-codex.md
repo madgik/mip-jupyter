@@ -140,6 +140,8 @@ Jupyter AI Codex is steered by a layered wiki instead of ad-hoc repo exploration
 
 The notebook runner injects slim `base_instructions` in the generated Codex model catalog that point production agents at `agent_read_guide` and the curated MCP tools.
 
+Those base instructions also tell Cohort Scout to make substantial notebook examples work as plain Python first, then transfer the verified sequence into notebook cells.
+
 The production single-user image seeds `workspace/` and `docs/user/` into `/home/jovyan/work`, bundles agent wiki at `/opt/mip-agent-docs/`, and does not copy client source into the user file browser.
 
 ## Verify Jupyter AI and Codex

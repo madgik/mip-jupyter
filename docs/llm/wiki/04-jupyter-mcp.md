@@ -64,8 +64,11 @@ These commands use `mip.Client.from_env()` and MIP platform metadata only. They 
 
 1. `read-guide`, then `search-docs` for user-facing docs.
 2. `notebook-outline` before targeted `read-cell` calls.
-3. Create new notebooks in `scratch/` unless the user names another path.
-4. Edit by index, then re-read the affected cell or outline before replying.
+3. For substantial examples or multi-step analysis notebooks, first build the step sequence in plain Python under `scratch/` or another temporary Python file.
+4. Run or otherwise verify the Python flow until it works.
+5. Transfer the verified steps into notebook cells with markdown explanations only after the Python version is ready.
+6. Create new notebooks in `scratch/` unless the user names another path.
+7. Edit by index, then re-read the affected cell or outline before replying.
 
 Legacy aliases still exist for `add-markdown`, `add-code`, and `read-notebook`, but prefer the commands above.
 
