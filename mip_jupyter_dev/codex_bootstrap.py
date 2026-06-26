@@ -14,6 +14,7 @@ from .jupyter_mcp_config import build_config as build_mcp_config
 from .jupyter_mcp_tools import SAFE_JUPYTER_MCP_TOOLS
 from .mip_acp_persona import MIP_PERSONA_ID
 from .mip_acp_persona import MIP_PERSONA_NAME
+from .mip_persona_manager import build_persona_manager_config
 
 DEFAULT_CODEX_BASE_URL = "http://100.92.46.71:8001/v1"
 DEFAULT_CODEX_MODEL = "qwen36-nvfp4"
@@ -250,11 +251,14 @@ def write_codex_config(path: Path, settings: CodexSettings, model_catalog_path: 
 
 
 def build_jupyter_ai_config(settings: CodexSettings) -> dict:
-    persona_manager_config: dict = {"default_persona_id": DEFAULT_CODEX_PERSONA_ID}
-    if not settings.enable_native_jupyter_mcp:
-        persona_manager_config["builtin_mcp_servers"] = []
+    builtin_mcp_servers: list | None = None if settings.enable_native_jupyter_mcp else []
     config = build_mcp_config(mcp_port=settings.mcp_port)
-    config["PersonaManager"] = persona_manager_config
+    config.update(
+        build_persona_manager_config(
+            default_persona_id=DEFAULT_CODEX_PERSONA_ID,
+            builtin_mcp_servers=builtin_mcp_servers,
+        )
+    )
     config["MCPExtensionApp"]["mcp_tools"] = SAFE_JUPYTER_MCP_TOOLS
     return config
 

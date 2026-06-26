@@ -20,6 +20,14 @@ from mip_jupyter_dev.codex_bootstrap import (
 )
 from mip_jupyter_dev.mip_acp_persona import MIP_PERSONA_ID
 from mip_jupyter_dev.mip_acp_persona import MIP_PERSONA_NAME
+from mip_jupyter_dev.mip_acp_persona import VLLM_UNAVAILABLE_MESSAGE
+from mip_jupyter_dev.mip_acp_persona import is_vllm_unavailable_error
+from mip_jupyter_dev.mip_persona_manager import (
+    ALLOWED_PERSONA_ENTRY_POINTS,
+    MIP_PERSONA_MANAGER_CLASS,
+    MipPersonaManager,
+)
+from mip_jupyter_dev.jupyter_mcp_config import build_config as build_mcp_config
 
 
 @pytest.fixture(autouse=True)
@@ -100,6 +108,19 @@ def test_notebook_cli_context_overrides_are_used() -> None:
     assert settings.auto_compact_limit == 3500
 
 
+def test_vllm_unavailable_detection_matches_connection_failures() -> None:
+    assert is_vllm_unavailable_error(ConnectionError("connection refused"))
+    assert is_vllm_unavailable_error(RuntimeError("503 Service Unavailable from vLLM"))
+    assert is_vllm_unavailable_error(TimeoutError("request timed out"))
+    assert not is_vllm_unavailable_error(ValueError("invalid notebook path"))
+
+
+def test_vllm_unavailable_message_is_user_facing() -> None:
+    assert "Cohort Scout cannot reach the qwen vLLM model service" in VLLM_UNAVAILABLE_MESSAGE
+    assert "MIP platform connection are unaffected" in VLLM_UNAVAILABLE_MESSAGE
+    assert "CODEX_VLLM_BASE_URL" in VLLM_UNAVAILABLE_MESSAGE
+
+
 def test_default_persona_is_cohort_scout() -> None:
     assert DEFAULT_CODEX_PERSONA_ID == MIP_PERSONA_ID
     assert MIP_PERSONA_NAME == "Cohort Scout"
@@ -119,4 +140,42 @@ def test_bootstrap_codex_writes_catalog_and_config(tmp_path: Path) -> None:
     assert (codex_home / "config.toml").is_file()
     jupyter_config_data = json.loads(jupyter_config.read_text(encoding="utf-8"))
     assert jupyter_config_data["PersonaManager"]["default_persona_id"] == MIP_PERSONA_ID
+    assert (
+        jupyter_config_data["PersonaManagerExtension"]["persona_manager_class"]
+        == MIP_PERSONA_MANAGER_CLASS
+    )
     assert jupyter_config.is_file()
+
+
+def test_mcp_config_uses_mip_persona_manager_only() -> None:
+    config = build_mcp_config(mcp_port=3001)
+    assert config["PersonaManager"]["default_persona_id"] == MIP_PERSONA_ID
+    assert config["PersonaManagerExtension"]["persona_manager_class"] == MIP_PERSONA_MANAGER_CLASS
+
+
+def test_mip_persona_manager_filters_third_party_entry_points(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jupyter_ai_persona_manager.persona_manager import PersonaManager
+
+    PersonaManager._ep_persona_classes = None
+
+    def fake_load_all(_self) -> None:
+        PersonaManager._ep_persona_classes = [
+            {"module": "codex-acp", "persona_class": object(), "traceback": None},
+            {"module": "claude-acp", "persona_class": object(), "traceback": None},
+            {"module": "cohort-scout", "persona_class": object(), "traceback": None},
+        ]
+
+    monkeypatch.setattr(PersonaManager, "_init_ep_persona_classes", fake_load_all)
+
+    manager = MipPersonaManager.__new__(MipPersonaManager)
+    import logging
+
+    manager.log = logging.getLogger("test")
+    MipPersonaManager._init_ep_persona_classes(manager)
+
+    loaded = PersonaManager._ep_persona_classes or []
+    assert [item["module"] for item in loaded] == ["cohort-scout"]
+    assert ALLOWED_PERSONA_ENTRY_POINTS == frozenset({"cohort-scout"})
+    PersonaManager._ep_persona_classes = None

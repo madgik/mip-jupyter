@@ -70,6 +70,8 @@ The generated model catalog contains only `qwen36-nvfp4` with a 32768-token cont
 
 The runner also prepends a generated `codex-acp` wrapper to `PATH`. The wrapper passes `-c approval_policy="never"`, `-c sandbox_mode="danger-full-access"`, and `-c shell_environment_policy.inherit="all"` directly to `codex-acp`; this is needed because the ACP process otherwise starts Codex with `on-request` approvals and a read-only sandbox even when the temporary `config.toml` contains the desired values.
 
+If the qwen vLLM endpoint is unavailable during a chat request, Cohort Scout catches the likely ACP/Codex connection error and replies with a short service-unavailable message instead of exposing a raw traceback to the user.
+
 The runner starts a curated Jupyter MCP wrapper server by default. It does not forward that server as native Responses `mcp` tools to Codex when using qwen vLLM, because the current vLLM Responses shim rejects native `mcp` and `web_search_preview` tool payloads with `Object of type Undefined is not JSON serializable`.
 
 Instead, Codex receives `JUPYTER_MCP_URL` and model instructions to call the MCP server through the shell bridge:
@@ -145,6 +147,7 @@ The production single-user image seeds `workspace/` and `docs/user/` into `/home
 1. Open JupyterLab.
 2. Open the chat panel from the left sidebar, or create a chat from the launcher.
 3. Type `@` in the chat input and verify that **Cohort Scout** appears in the persona menu.
+   Stock Jupyter AI ACP personas such as Codex, Claude, and Copilot are hidden; Cohort Scout is the only available persona.
 4. Use one of the existing notebooks as context, for example `workspace/examples/feres_analysis.ipynb` or `workspace/Welcome.ipynb`.
 5. Send one of these prompts:
 

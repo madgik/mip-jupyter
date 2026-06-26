@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 
 from .jupyter_mcp_tools import SAFE_JUPYTER_MCP_TOOLS
+from .mip_acp_persona import MIP_PERSONA_ID
+from .mip_persona_manager import build_persona_manager_config
 
 
 def build_config(*, mcp_port: int | None = None) -> dict:
@@ -16,7 +18,7 @@ def build_config(*, mcp_port: int | None = None) -> dict:
     }
     if mcp_port is not None:
         extension_config["mcp_port"] = mcp_port
-    return {
+    config = {
         "MCPExtensionApp": extension_config,
         # RTC sync can leave cells stuck on [*] behind Hub/nginx proxies.
         "YDocExtension": {"disable_rtc": True},
@@ -26,6 +28,13 @@ def build_config(*, mcp_port: int | None = None) -> dict:
             "websocket_ping_timeout": 30000,
         },
     }
+    config.update(
+        build_persona_manager_config(
+            default_persona_id=MIP_PERSONA_ID,
+            builtin_mcp_servers=[],
+        )
+    )
+    return config
 
 
 def _parser() -> argparse.ArgumentParser:
