@@ -129,7 +129,7 @@ def _add_content_args(parser: argparse.ArgumentParser) -> None:
 def _add_guide_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--page")
     parser.add_argument("--topic")
-    parser.add_argument("--max-chars", type=int, default=4000)
+    parser.add_argument("--max-chars", type=int, default=tools.DEFAULT_WIKI_MAX_CHARS)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -187,21 +187,23 @@ def _parser() -> argparse.ArgumentParser:
     env_status.set_defaults(no_args=True)
 
     catalog = subparsers.add_parser("mip-catalog-summary", help="List compact data-model summaries")
-    catalog.add_argument("--limit", type=int, default=20)
+    catalog.add_argument("--limit", type=int, default=tools.DEFAULT_CATALOG_LIMIT)
 
     data_model = subparsers.add_parser("mip-data-model-summary", help="Summarize one data model")
     data_model.add_argument("code")
     data_model.add_argument("--version")
     data_model.add_argument("--include-variables", action="store_true")
+    data_model.add_argument("--include-groups", action="store_true")
+    data_model.add_argument("--limit", type=int, default=tools.DEFAULT_DATA_MODEL_LIST_LIMIT)
 
     search_vars = subparsers.add_parser("mip-search-variables", help="Search variables in a data model")
     search_vars.add_argument("code")
     search_vars.add_argument("query", nargs="+")
     search_vars.add_argument("--version")
-    search_vars.add_argument("--limit", type=int, default=20)
+    search_vars.add_argument("--limit", type=int, default=tools.DEFAULT_VARIABLE_SEARCH_LIMIT)
 
     algorithms = subparsers.add_parser("mip-algorithm-summary", help="List compact algorithm summaries")
-    algorithms.set_defaults(no_args=True)
+    algorithms.add_argument("--limit", type=int, default=tools.DEFAULT_ALGORITHM_SUMMARY_LIMIT)
 
     scratch_copy = subparsers.add_parser(
         "scratch-copy-template",
@@ -301,7 +303,13 @@ def _tool_call_for_args(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
     if command == "mip-data-model-summary":
         return (
             "mip_data_model_summary",
-            {"code": args.code, "version": args.version, "include_variables": args.include_variables},
+            {
+                "code": args.code,
+                "version": args.version,
+                "include_variables": args.include_variables,
+                "include_groups": args.include_groups,
+                "limit": args.limit,
+            },
         )
     if command == "mip-search-variables":
         return (
@@ -309,7 +317,7 @@ def _tool_call_for_args(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
             {"code": args.code, "version": args.version, "query": _text_arg(args.query), "limit": args.limit},
         )
     if command == "mip-algorithm-summary":
-        return "mip_algorithm_summary", {}
+        return "mip_algorithm_summary", {"limit": args.limit}
     if command == "scratch-copy-template":
         return "scratch_copy_template", {"dest": args.dest, "source": args.source}
     if command == "scratch-copy-file":

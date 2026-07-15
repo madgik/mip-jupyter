@@ -11,15 +11,13 @@ from traitlets.utils.importstring import import_item
 
 from mip_jupyter_dev import notebook as notebook_runner
 from mip_jupyter_dev.codex_bootstrap import (
+    BASE_INSTRUCTIONS_MAX_CHARS,
     DEFAULT_CODEX_MODEL,
     DEFAULT_CODEX_MODELS,
     DEFAULT_CODEX_PERSONA_ID,
     DEFAULT_CODEX_REASONING_EFFORT,
-    FEDERATED_RULES,
-    EXPLORATION_RULES,
     MCP_CLI_RULES,
     NATIVE_MCP_RULES,
-    NOVEL_STROKE_RULES,
     PRIVACY_RULES,
     ROUTING_RULES,
     SCOPE_RULES,
@@ -71,7 +69,7 @@ def test_from_env_default_model_is_nemotron() -> None:
     assert settings.auto_compact_limit == 112000
     assert settings.catalog_models == ("nemotron3-super-nvfp4",)
     assert settings.reasoning_effort == DEFAULT_CODEX_REASONING_EFFORT
-    assert settings.reasoning_effort == "medium"
+    assert settings.reasoning_effort == "low"
     assert not settings.enable_native_jupyter_mcp
 
 
@@ -104,29 +102,28 @@ def test_model_catalog_contains_nemotron_model_only(tmp_path: Path) -> None:
 
     nemotron = catalog["models"][0]
     assert nemotron["context_window"] == 131072
-    assert nemotron["default_reasoning_level"] == "medium"
+    assert nemotron["default_reasoning_level"] == "low"
     assert {level["effort"] for level in nemotron["supported_reasoning_levels"]} == {
         "minimal",
         "low",
         "medium",
     }
-    assert "recipes/stroke-analysis" not in nemotron["base_instructions"]
+    assert "recipes/stroke-analysis" in nemotron["base_instructions"]
+    assert "--topic" in nemotron["base_instructions"]
+    assert "skip AGENTS" in nemotron["base_instructions"]
     assert SCOPE_RULES in nemotron["base_instructions"]
     assert MCP_CLI_RULES in nemotron["base_instructions"]
     assert TOOL_PAYLOAD_RULES in nemotron["base_instructions"]
     assert PRIVACY_RULES in nemotron["base_instructions"]
     assert ROUTING_RULES in nemotron["base_instructions"]
-    assert FEDERATED_RULES not in nemotron["base_instructions"]
-    assert EXPLORATION_RULES not in nemotron["base_instructions"]
-    assert NOVEL_STROKE_RULES not in nemotron["base_instructions"]
     assert "available_algorithms" not in nemotron["base_instructions"]
-    assert "novel_stroke_starter" not in nemotron["base_instructions"]
+    assert "stroke_preflight" not in nemotron["base_instructions"]
     assert "write_stdin" in nemotron["base_instructions"]
     assert "Subcommands:" not in nemotron["base_instructions"]
     assert "never call native mcp__* tools" in nemotron["base_instructions"]
-    assert "Never retry write commands" in nemotron["base_instructions"]
-    assert len(nemotron["base_instructions"]) < 2900
-    assert len(build_base_instructions()) < 2900
+    assert "never retry writes" in nemotron["base_instructions"]
+    assert len(nemotron["base_instructions"]) <= BASE_INSTRUCTIONS_MAX_CHARS
+    assert len(build_base_instructions()) <= BASE_INSTRUCTIONS_MAX_CHARS
 
 
 def test_native_model_instructions_allow_native_mcp(tmp_path: Path) -> None:
@@ -152,7 +149,7 @@ def test_config_toml_uses_default_nemotron_model(tmp_path: Path) -> None:
     assert 'model = "nemotron3-super-nvfp4"' in config
     assert "model_context_window = 131072" in config
     assert "model_auto_compact_token_limit = 112000" in config
-    assert 'model_reasoning_effort = "medium"' in config
+    assert 'model_reasoning_effort = "low"' in config
     assert '[mcp_servers."Jupyter MCP Server"]' not in config
 
 
@@ -179,10 +176,10 @@ def test_read_guide_cli_routes_to_allowlisted_page() -> None:
     name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
     assert name == "agent_read_guide"
     assert arguments == {
-        "topic": "Client.from_env",
-        "page": "05-env-and-backend",
-        "max_chars": 4000,
-    }
+            "topic": "Client.from_env",
+            "page": "05-env-and-backend",
+            "max_chars": jupyter_mcp_cli.tools.DEFAULT_WIKI_MAX_CHARS,
+        }
 
 
 def test_notebook_cli_context_overrides_are_used() -> None:

@@ -48,7 +48,7 @@ flowchart LR
 | **exaflow-controller** | Quart HTTP API; validates analysis requests, selects execution strategy, orchestrates worker tasks. |
 | **exaflow-workers (CSCS)** | gRPC workers running inside **CSCS Alps** (Lugano), the Swiss National Supercomputing Centre. |
 | **exaflow-workers (hospitals)** | gRPC workers on **remote VMs at hospital sites**, holding local clinical data. |
-| **vLLM** | OpenAI-compatible `/v1/responses` endpoint (`nemotron3-super-nvfp4`) for Cohort Scout chat inference via `CODEX_VLLM_BASE_URL`. |
+| **vLLM** | OpenAI-compatible `/v1/responses` (`nemotron3-super-nvfp4`) for Cohort Scout via `CODEX_VLLM_BASE_URL`. |
 
 Flow: `Jupyter MCP Server → platform-backend → exaflow-controller → exaflow-workers` (at CSCS or hospital remote VMs).
 
@@ -67,6 +67,10 @@ vLLM rejects native Responses `mcp` and `web_search_preview` tool payloads. The 
 
 ## vLLM
 
-LLM inference uses a configured vLLM endpoint (`CODEX_VLLM_BASE_URL`, model `nemotron3-super-nvfp4`). This is separate from federated analysis compute at CSCS and hospital workers.
+LLM inference uses a configured vLLM endpoint (`CODEX_VLLM_BASE_URL`, served id
+`nemotron3-super-nvfp4` for `nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4`).
+Hub passes `CODEX_REASONING_EFFORT` (default `low`). Catalog `base_instructions`
+steer one topic-scoped `read-guide` cold start. This is separate from federated
+analysis compute at CSCS and hospital workers.
 
 See [jupyter-ai-codex.md](jupyter-ai-codex.md) for operator setup and verification.

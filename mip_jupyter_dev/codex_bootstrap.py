@@ -16,105 +16,76 @@ from .mip_acp_persona import MIP_PERSONA_ID
 from .mip_acp_persona import MIP_PERSONA_NAME
 from .mip_persona_manager import build_persona_manager_config
 
+# Slim production catalog instructions. Scope/refusal detail: wiki/00 on demand.
 MIP_CONTEXT = (
-    "MIP (Medical Informatics Platform) is a federated clinical research platform. "
-    "Hospital sites keep patient data locally; use the pre-installed mip client in "
-    "Jupyter to discover authorized metadata, define cohorts, and run federated analyses."
-)
-
-USER_FACING_RULES = (
-    "Use plain product language: say 'the MIP platform', 'your connection', 'catalog', "
-    "or 'analysis run'. Do not expose internal routes, URLs, infrastructure, or "
-    "environment variable names unless developer or operator setup is requested. "
-    "For connection issues, point to Welcome.ipynb, docs/troubleshooting.md, or "
-    "the platform administrator."
+    "MIP federated research: use mip for catalog, cohorts, and analyses."
 )
 
 SCOPE_RULES = (
-    "Stay in scope: MIP JupyterLab, notebooks, the mip client, catalog, cohorts, "
-    "pipelines, results, workspace docs, and supporting Python or statistics. For "
-    "unrelated requests such as recipes, general knowledge, personal medical advice, "
-    "or unrelated projects, do not call tools; refuse briefly as Cohort Scout and "
-    "redirect to MIP notebook help. Do not invent catalog data."
+    "MIP notebooks only; refuse off-topic without tools; no invented catalog data."
 )
 
-MCP_CLI_RULES = (
-    "NOTEBOOK AND MIP TOOLS (shell bridge): Use jupyter-mcp or python -m "
-    "mip_jupyter_dev.jupyter_mcp_cli for notebook, wiki, user-doc, and MIP metadata "
-    "actions. In shell-bridge mode, never call native mcp__* tools and never create "
-    "or edit .ipynb files by writing JSON or direct filesystem edits. Read only the "
-    "guide, routed wiki page, or user docs needed for the task. Retry once only for "
-    "transient read failures (read-guide, search-docs, notebook-outline, read-cell, "
-    "scratch-list, scratch-read, mip-* summaries). Never retry write commands "
-    "(append-code, scratch-append-lines, scratch-to-notebook) without scratch-list or "
-    "notebook-outline first."
+USER_FACING_RULES = (
+    "Say MIP platform/connection/catalog/analysis run; hide routes/URLs/env names "
+    "unless operator setup is requested."
 )
 
 PRIVACY_RULES = (
-    "Never expose row-level patient data, identifiers, tokens, or raw execution "
-    "outputs. Report only authorized aggregate metadata and analysis results."
+    "Aggregates only; never expose tokens, identifiers, or row-level data."
 )
 
-ROUTING_RULES = (
-    "Read read-guide --page index to pick the task wiki page; load analysis-specific "
-    "rules from that routed page only."
+MCP_CLI_RULES = (
+    "Shell bridge: jupyter-mcp or python -m mip_jupyter_dev.jupyter_mcp_cli only; "
+    "never call native mcp__* tools; never edit .ipynb via JSON/filesystem. "
+    "Payloads: read-guide --page 04-jupyter-mcp --topic payload. "
+    "Retry reads once; never retry writes without scratch-list/notebook-outline."
 )
 
 NATIVE_MCP_RULES = (
-    "NOTEBOOK AND MIP TOOLS (native MCP): Use the configured Jupyter MCP tools for "
-    "notebook, wiki, user-doc, and MIP metadata actions. Never create or edit .ipynb "
-    "files by writing JSON or direct filesystem edits."
+    "Native MCP: configured Jupyter MCP tools only; never edit .ipynb via JSON "
+    "or filesystem writes."
 )
 
 TOOL_PAYLOAD_RULES = (
-    "Keep tool args small JSON. No write_stdin/heredocs/shell file writes. "
-    "Use scratch-copy-template, scratch-append-lines, scratch-replace-snippet, "
+    "Small JSON args. No write_stdin/heredocs/shell writes. Prefer "
+    "scratch-copy-template, scratch-append-lines, scratch-replace-snippet, "
     "scratch-to-notebook, append-code."
 )
 
-PLAIN_PYTHON_RULES = (
-    "Novel/multi-step: scratch-copy-template from examples/algorithm_examples.py, "
-    "small scratch edits, verify with python scratch/<name>.py, then scratch-to-notebook."
+ROUTING_RULES = (
+    "Cold start: skip AGENTS/00/index when intent is clear. "
+    "read-guide --page PAGE --topic when known "
+    "(novel stroke→recipes/stroke-analysis --topic novel; "
+    "notebook tools→04-jupyter-mcp --topic payload; "
+    "algorithms→07-pipeline-algorithms --topic methods; "
+    "env→05-env-and-backend --topic from_env; onboarding→01-onboarding). "
+    "index only if unclear; 00-agent-workspace only for refusal/scope. "
+    "One guide page per turn."
 )
 
-FEDERATED_RULES = (
-    "Federated only: dm.datasets['SSR']; never mix SSR with SSR-even/odd. Run "
-    "stroke_preflight before inference. Use pipeline.available_algorithms() and "
-    "typed Pipeline methods; signatures in examples/algorithm_examples.py. "
-    "No inputdata/to_frame/sklearn on rows."
-)
-
-EXPLORATION_RULES = (
-    "Exploration: read-guide agent-exploration; scratch-init on turn 1; "
-    "scratch-list before new scripts; scratch-log-bottleneck after each step; "
-    "max 20 lines per scratch edit."
-)
-
-NOVEL_STROKE_RULES = (
-    "Novel Stroke: read-guide recipes/stroke-analysis novel, preflight, one hypothesis, "
-    "scratch-copy-template from examples/algorithm_examples.py, trim to one analysis, "
-    "run script, scratch-to-notebook. OR (95% CI) primary; secondary exploratory."
-)
+# Soft budget for production catalog base_instructions (chars).
+BASE_INSTRUCTIONS_MAX_CHARS = 1400
 
 
 def build_base_instructions(*, enable_native_jupyter_mcp: bool = False) -> str:
     tool_rules = NATIVE_MCP_RULES if enable_native_jupyter_mcp else MCP_CLI_RULES
     return (
-        f"You are {MIP_PERSONA_NAME} in JupyterLab for MIP analysis users. {MIP_CONTEXT} "
-        f"{SCOPE_RULES} {USER_FACING_RULES} {PRIVACY_RULES} {tool_rules} {TOOL_PAYLOAD_RULES} "
-        f"{ROUTING_RULES} Keep new work under scratch/, use curated MIP metadata tools, "
-        "and avoid broad filesystem reads."
+        f"You are {MIP_PERSONA_NAME}. {MIP_CONTEXT} {SCOPE_RULES} "
+        f"{USER_FACING_RULES} {PRIVACY_RULES} {tool_rules} {TOOL_PAYLOAD_RULES} "
+        f"{ROUTING_RULES} New work under scratch/; curated metadata only."
     )
 
 
 BASE_INSTRUCTIONS = build_base_instructions()
 
 DEFAULT_CODEX_BASE_URL = "http://100.92.46.71:8001/v1"
+# Must match the vLLM /v1/models id (alias for nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4).
 DEFAULT_CODEX_MODEL = "nemotron3-super-nvfp4"
 DEFAULT_CODEX_PROVIDER = "vllm"
+# Agent window is capped below the served max_model_len (262144) to limit context bloat.
 DEFAULT_CODEX_CONTEXT_WINDOW = 131072
 DEFAULT_CODEX_AUTO_COMPACT_LIMIT = 112000
-DEFAULT_CODEX_REASONING_EFFORT = "medium"
+DEFAULT_CODEX_REASONING_EFFORT = "low"
 SUPPORTED_CODEX_REASONING_EFFORTS = frozenset({"minimal", "low", "medium"})
 DEFAULT_CODEX_PERSONA_ID = MIP_PERSONA_ID
 DEFAULT_MCP_PORT = 3001
@@ -133,7 +104,11 @@ VLLM_MODEL_REGISTRY: dict[str, VllmModelProfile] = {
     "nemotron3-super-nvfp4": VllmModelProfile(
         slug="nemotron3-super-nvfp4",
         display_name="nemotron3-super-nvfp4",
-        description="NVIDIA Nemotron 3 Super NVFP4 model served by vLLM for mip-jupyter.",
+        description=(
+            "NVIDIA Nemotron 3 Super 120B-A12B NVFP4 via vLLM "
+            "(served id nemotron3-super-nvfp4; HF root "
+            "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4)."
+        ),
         context_window=131072,
         auto_compact_limit=112000,
         priority=0,

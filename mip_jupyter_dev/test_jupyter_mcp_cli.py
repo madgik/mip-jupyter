@@ -32,7 +32,13 @@ def test_mip_data_model_summary_requires_version_flag() -> None:
     )
     name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
     assert name == "mip_data_model_summary"
-    assert arguments == {"code": "stroke", "version": "3.7", "include_variables": False}
+    assert arguments == {
+        "code": "stroke",
+        "version": "3.7",
+        "include_variables": False,
+        "include_groups": False,
+        "limit": jupyter_mcp_cli.tools.DEFAULT_DATA_MODEL_LIST_LIMIT,
+    }
 
 
 def test_parse_sse_response_reads_data_lines() -> None:

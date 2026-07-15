@@ -31,7 +31,8 @@ ALLOWED_WIKI_PAGES: dict[str, Path] = {
 BLOCKED_PATH_PARTS = {".ipynb_checkpoints", ".venv", ".playwright-cli", "__pycache__"}
 MAX_DOC_RESULTS = 10
 MAX_DOC_SNIPPET_CHARS = 600
-MAX_WIKI_CONTENT_CHARS = 8000
+MAX_WIKI_CONTENT_CHARS = 6000
+DEFAULT_WIKI_MAX_CHARS = 3000
 MAX_CELL_READ_CHARS = 20000
 MAX_CELL_WRITE_CHARS = 4000
 MAX_SCRATCH_APPEND_LINES = 20
@@ -54,10 +55,15 @@ MAX_SCRATCH_BOTTLENECK_FIELD = 120
 MAX_SCRATCH_BOTTLENECK_NOTE = 360
 MAX_NOTEBOOK_OUTLINE_CELLS = 100
 MAX_EXECUTED_CELL_SUMMARIES = 20
-MAX_LIST_ITEMS = 100
-MAX_METADATA_ITEM_CHARS = 512
-MAX_METADATA_STRING_CHARS = 240
-MAX_RESPONSE_JSON_CHARS = 24000
+# Hard caps for MIP metadata list payloads (production Cohort Scout context).
+MAX_LIST_ITEMS = 40
+DEFAULT_CATALOG_LIMIT = 10
+DEFAULT_VARIABLE_SEARCH_LIMIT = 10
+DEFAULT_ALGORITHM_SUMMARY_LIMIT = 20
+DEFAULT_DATA_MODEL_LIST_LIMIT = 20
+MAX_METADATA_ITEM_CHARS = 400
+MAX_METADATA_STRING_CHARS = 180
+MAX_RESPONSE_JSON_CHARS = 12000
 SAFE_JUPYTER_MCP_TOOLS = [
     "mip_jupyter_dev.jupyter_mcp_tools:agent_read_guide",
     "mip_jupyter_dev.jupyter_mcp_tools:agent_search_docs",
@@ -442,13 +448,13 @@ def _section_matches(text: str, topic: str) -> list[str]:
 async def agent_read_guide(
     page: str | None = None,
     topic: str | None = None,
-    max_chars: int = 4000,
+    max_chars: int = DEFAULT_WIKI_MAX_CHARS,
 ) -> dict[str, Any]:
     """Read an allowlisted agent wiki page, optionally narrowed by topic."""
 
     page_key, guide_path = _agent_wiki_path(page)
     relative_path = ALLOWED_WIKI_PAGES[page_key]
-    max_chars = _limit(max_chars, 4000, MAX_WIKI_CONTENT_CHARS)
+    max_chars = _limit(max_chars, DEFAULT_WIKI_MAX_CHARS, MAX_WIKI_CONTENT_CHARS)
     if guide_path is None:
         return {
             "ok": False,
@@ -780,10 +786,10 @@ def _bounded_metadata_response(
     return payload
 
 
-async def mip_catalog_summary(limit: int = 20) -> dict[str, Any]:
+async def mip_catalog_summary(limit: int = DEFAULT_CATALOG_LIMIT) -> dict[str, Any]:
     """Return compact authorized data-model summaries from the MIP platform."""
 
-    limit = _limit(limit, 20, MAX_LIST_ITEMS)
+    limit = _limit(limit, DEFAULT_CATALOG_LIMIT, MAX_LIST_ITEMS)
     try:
         summaries = _mip_client().catalog().summaries()
     except Exception as exc:  # noqa: BLE001 - MCP tools should return structured errors.
@@ -803,13 +809,16 @@ async def mip_data_model_summary(
     code: str,
     version: str | None = None,
     include_variables: bool = False,
+    include_groups: bool = False,
+    limit: int = DEFAULT_DATA_MODEL_LIST_LIMIT,
 ) -> dict[str, Any]:
     """Return compact metadata for one data model."""
 
+    limit = _limit(limit, DEFAULT_DATA_MODEL_LIST_LIMIT, MAX_LIST_ITEMS)
     try:
         data_model = _mip_client().catalog().data_model(code, version=version)
         variables = data_model.list_variables() if include_variables else []
-        groups = data_model.list_groups()
+        groups = data_model.list_groups() if include_groups else []
         datasets = data_model.list_datasets()
     except Exception as exc:  # noqa: BLE001 - MCP tools should return structured errors.
         return _tool_error(exc)
@@ -817,12 +826,12 @@ async def mip_data_model_summary(
     result = {
         "ok": True,
         "summary": _compact_metadata_item(data_model.summary()),
-        "datasets": _compact_metadata_items(datasets, MAX_LIST_ITEMS),
-        "datasets_truncated": len(datasets) > MAX_LIST_ITEMS,
-        "groups": _compact_metadata_items(groups, MAX_LIST_ITEMS),
-        "groups_truncated": len(groups) > MAX_LIST_ITEMS,
-        "variables": _compact_metadata_items(variables, MAX_LIST_ITEMS),
-        "variables_truncated": len(variables) > MAX_LIST_ITEMS,
+        "datasets": _compact_metadata_items(datasets, limit),
+        "datasets_truncated": len(datasets) > limit,
+        "groups": _compact_metadata_items(groups, limit),
+        "groups_truncated": len(groups) > limit,
+        "variables": _compact_metadata_items(variables, limit),
+        "variables_truncated": len(variables) > limit,
     }
     return _bounded_metadata_response(
         result,
@@ -834,11 +843,11 @@ async def mip_search_variables(
     code: str,
     query: str,
     version: str | None = None,
-    limit: int = 20,
+    limit: int = DEFAULT_VARIABLE_SEARCH_LIMIT,
 ) -> dict[str, Any]:
     """Search variables in one data model by code or label."""
 
-    limit = _limit(limit, 20, MAX_LIST_ITEMS)
+    limit = _limit(limit, DEFAULT_VARIABLE_SEARCH_LIMIT, MAX_LIST_ITEMS)
     try:
         data_model = _mip_client().catalog().data_model(code, version=version)
         matches = [variable.summary() for variable in data_model.variables.search(query)]
@@ -858,9 +867,10 @@ async def mip_search_variables(
     )
 
 
-async def mip_algorithm_summary() -> dict[str, Any]:
+async def mip_algorithm_summary(limit: int = DEFAULT_ALGORITHM_SUMMARY_LIMIT) -> dict[str, Any]:
     """Return compact algorithm summaries from the MIP platform."""
 
+    limit = _limit(limit, DEFAULT_ALGORITHM_SUMMARY_LIMIT, MAX_LIST_ITEMS)
     try:
         algorithms = _mip_client().algorithms().list()
         summaries = [algorithm.summary() for algorithm in algorithms]
@@ -876,8 +886,8 @@ async def mip_algorithm_summary() -> dict[str, Any]:
             "ok": True,
             "count": len(summaries),
             "counts_by_type": counts_by_type,
-            "items": _compact_metadata_items(summaries, MAX_LIST_ITEMS),
-            "truncated": len(summaries) > MAX_LIST_ITEMS,
+            "items": _compact_metadata_items(summaries, limit),
+            "truncated": len(summaries) > limit,
         },
         list_keys=("items",),
     )

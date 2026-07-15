@@ -49,7 +49,7 @@ model_provider = "vllm"
 model_catalog_json = "/tmp/mip-codex-home-.../model-catalog.json"
 model_context_window = 131072
 model_auto_compact_token_limit = 112000
-model_reasoning_effort = "medium"
+model_reasoning_effort = "low"
 model_reasoning_summary = "none"
 model_supports_reasoning_summaries = false
 approval_policy = "never"
@@ -66,7 +66,11 @@ base_url = "http://100.92.46.71:8001/v1"
 wire_api = "responses"
 ```
 
-The generated model catalog contains only `nemotron3-super-nvfp4` with a 131072-token context window. Catalog metadata intentionally keeps the Responses payload compatible with the current vLLM shim by setting `support_verbosity` to `false`, `apply_patch_tool_type` to `null`, `supports_parallel_tool_calls` to `false`, and `use_responses_lite` to `true`.
+The generated model catalog contains only `nemotron3-super-nvfp4` (vLLM alias for
+`nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4`) with a 131072-token agent context
+window (served `max_model_len` may be higher). Default reasoning effort is `low`
+for chat speed; set `CODEX_REASONING_EFFORT=medium` for multi-step exploration.
+Catalog metadata intentionally keeps the Responses payload compatible with the current vLLM shim by setting `support_verbosity` to `false`, `apply_patch_tool_type` to `null`, `supports_parallel_tool_calls` to `false`, and `use_responses_lite` to `true`.
 
 The runner also prepends a generated `codex-acp` wrapper to `PATH`. The wrapper passes `-c approval_policy="never"`, `-c sandbox_mode="danger-full-access"`, and `-c shell_environment_policy.inherit="all"` directly to `codex-acp`; this is needed because the ACP process otherwise starts Codex with `on-request` approvals and a read-only sandbox even when the temporary `config.toml` contains the desired values.
 
@@ -146,7 +150,18 @@ Jupyter AI Codex is steered by a layered wiki instead of ad-hoc repo exploration
 - [`docs/llm/INDEX.md`](../docs/llm/INDEX.md) — wiki map and task routing table
 - [`docs/user/`](../docs/user/) — canonical user documentation (shipped to workspace `docs/`)
 
-The notebook runner injects slim `base_instructions` in the generated Codex model catalog that point production agents at the routed wiki and curated MCP tools only when those sources are needed.
+The notebook runner injects slim `base_instructions` in the generated Codex model
+catalog. Production Cohort Scout should cold-start from those instructions plus
+**one** `read-guide --page PAGE [--topic …]` — not AGENTS → INDEX → 00. Prefer
+`--topic` (`novel`, `payload`, `from_env`, `methods`, `scope`). Hub spawners pass
+`CODEX_REASONING_EFFORT` (default `low`) with the vLLM URL/model.
+
+Context budget gate (offline; optional live TTFT):
+
+```bash
+scripts/eval-cohort-scout-context.sh
+scripts/eval-cohort-scout-context.sh --live-vllm
+```
 
 In shell-bridge mode, those instructions require Cohort Scout to use
 `jupyter_mcp_cli` for notebook and MIP tool actions; native `mcp__*` tools are

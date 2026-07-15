@@ -15,15 +15,20 @@ curl -fsS "${BASE_URL}/responses" \
   -d "{\"model\":\"${MODEL}\",\"input\":\"Reply with OK only.\",\"max_output_tokens\":256}" \
   | grep -q '"status"'
 
-echo "Running shell guard and persona regression tests..."
+echo "Running shell guard, persona, and context-eval regression tests..."
 cd "${ROOT}"
 uv run pytest \
   mip_jupyter_dev/test_shell_guard.py \
   mip_jupyter_dev/test_codex_bootstrap.py \
+  mip_jupyter_dev/test_cohort_scout_eval.py \
   mip_jupyter_dev/test_stroke_federated.py \
   -q \
-  -k "shell or tool_call_parse or vllm_unavailable or select_primary or coverage or format_logistic or parse_logistic"
+  -k "shell or tool_call_parse or vllm_unavailable or select_primary or coverage or format_logistic or parse_logistic or eval or base_instructions or offline_eval or catalog_defaults or from_env_default"
+
+echo "Running offline context budget eval..."
+uv run python -m mip_jupyter_dev.cohort_scout_eval
 
 echo "Acceptance gate passed."
 echo "Manual UI check (optional): in JupyterLab chat, send:"
 echo "  @Cohort Scout run a novel statistical stroke analysis with significance on SSR"
+echo "Optional live TTFT: scripts/eval-cohort-scout-context.sh --live-vllm"

@@ -1,121 +1,78 @@
 # Jupyter MCP — Curated Notebook and MIP Tools
 
-**Read when:** You must create, edit, run, or inspect notebooks from Jupyter AI Codex.
+**Read when:** Create, edit, run, or inspect notebooks from Jupyter AI / Codex.
 
-**Skip if:** The user only asks about MIP analysis API (see `03-mip-client-api.md`).
+**Skip if:** API-only questions (`03-mip-client-api.md`). Off-topic → `00-agent-workspace.md`.
 
-Off-topic requests are out of scope — see `00-agent-workspace.md`.
+## Shell bridge
 
-## Why the shell bridge
-
-The vLLM Responses shim rejects native `mcp` tool payloads. Codex calls curated tools through:
+vLLM rejects native Responses `mcp` tools. Use:
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli <command> ...
+# or: jupyter-mcp <command> ...
 ```
 
 `JUPYTER_MCP_URL` is set by the notebook runner.
 
-## Tool payload safety (vLLM)
+## Tool payload safety
 
-Keep every tool-call argument **small and valid JSON**. One command per turn when possible.
+Keep args **small valid JSON**. Prefer a few small related calls over one giant
+payload; split large edits.
 
-### Forbidden
+**Forbidden:** `write_stdin` / heredocs / shell redirects into workspace;
+giant `python -c`; `--content-file -`; paths outside the workspace; `cat` on
+`.ipynb` JSON; replaying huge scripts after compaction.
 
-- `write_stdin` for multi-line code
-- Heredocs: `cat > file << 'EOF'`
-- Shell redirects into `scratch/` or `workspace/`
-- Giant `python -c "..."` blocks (more than a few lines)
-- Piping large bodies via `--content-file -`
-- `--content-file` paths outside the Jupyter workspace
-- `cat notebook.ipynb | python -c` to parse JSON
-- Replaying 500+ line scripts after compaction
+**Safe:** metadata summaries → `notebook-outline` / bounded `read-cell` →
+`scratch-copy-template` + `scratch-append-lines` / `scratch-replace-snippet` →
+`python scratch/<name>.py` → `scratch-to-notebook`.
 
-### Safe patterns
+On **tool-call formatting errors**: new chat, `scratch-list`, resume existing
+`scratch/*.py` with smaller steps.
 
-1. Bounded discovery: `mip-env-status`, `mip-data-model-summary`, `mip-search-variables`
-2. `notebook-outline` then `read-cell` with `--max-chars`
-3. Novel/multi-step analysis:
-   - `scratch-copy-template scratch/<name>.py`
-   - `scratch-append-lines` / `scratch-replace-snippet` for small edits
-   - `python scratch/<name>.py` to verify
-   - `scratch-to-notebook scratch/<name>.py scratch/<name>.ipynb --title "<name>"`
-4. Transfer verified flow into notebook cells incrementally
-
-`--content-file path` is for modest cell bodies from a **workspace-relative** path only. For substantial code, use scratch tools — not shell writes.
-
-### Recovery
-
-If Cohort Scout reports a **tool-call formatting error**, start a **new chat** and retry with a smaller step. Resume from existing `scratch/*.py` artifacts instead of regenerating large scripts. Your notebook and MIP connection are unaffected.
-
-## Scratch edit commands
+## Common commands
 
 ```bash
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-init
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-copy-file scratch/_session.md scratch/_session.template.md
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-read scratch/_session.md --max-chars 4000
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-copy-template scratch/my_analysis.py --source examples/algorithm_examples.py
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-append-lines scratch/my_analysis.py "# comment"
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-replace-snippet scratch/my_analysis.py "OLD" "NEW"
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-to-notebook scratch/my_analysis.py scratch/my_analysis.ipynb --title "My analysis"
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-list
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-log-bottleneck t_test failed platform_error "full error message"
+# context — always prefer --topic when intent is known
+jupyter-mcp read-guide --page 04-jupyter-mcp --topic payload
+jupyter-mcp read-guide --page recipes/stroke-analysis --topic novel
+jupyter-mcp search-docs "Client.from_env"
+jupyter-mcp notebook-outline PATH
+jupyter-mcp read-cell PATH INDEX --max-chars 3000
+
+# scratch
+jupyter-mcp scratch-init
+jupyter-mcp scratch-list
+jupyter-mcp scratch-copy-template scratch/my.py --source examples/algorithm_examples.py
+jupyter-mcp scratch-append-lines scratch/my.py "# comment"
+jupyter-mcp scratch-replace-snippet scratch/my.py "OLD" "NEW"
+jupyter-mcp scratch-to-notebook scratch/my.py scratch/my.ipynb --title "My analysis"
+jupyter-mcp scratch-log-bottleneck STEP STATUS BLOCKER "note"
+
+# notebook
+jupyter-mcp create-notebook scratch/x.ipynb
+jupyter-mcp append-markdown|append-code|edit-cell|open-file ...
+jupyter-mcp run-cell PATH INDEX --timeout 30   # also runs prior code cells
+jupyter-mcp run-all-cells PATH --timeout 60
+
+# MIP metadata (defaults are intentionally small)
+jupyter-mcp mip-env-status
+jupyter-mcp mip-catalog-summary --limit 10
+jupyter-mcp mip-data-model-summary stroke --version 3.7
+jupyter-mcp mip-search-variables stroke "NIHSS" --version 3.7 --limit 10
+jupyter-mcp mip-algorithm-summary --limit 20
 ```
 
-Exploration workflow and bottleneck taxonomy: `read-guide --page agent-exploration`.
-
-Scripts transferred to notebooks should include `# %%` section markers when splitting cells (see `examples/algorithm_examples.py`).
-
-## Context commands
-
-```bash
-python -m mip_jupyter_dev.jupyter_mcp_cli read-guide
-python -m mip_jupyter_dev.jupyter_mcp_cli read-guide --page index
-python -m mip_jupyter_dev.jupyter_mcp_cli read-guide --page recipes/stroke-analysis --topic "pipeline"
-python -m mip_jupyter_dev.jupyter_mcp_cli search-docs "Client.from_env"
-python -m mip_jupyter_dev.jupyter_mcp_cli notebook-outline workspace/examples/feres_analysis.ipynb
-python -m mip_jupyter_dev.jupyter_mcp_cli read-cell workspace/examples/feres_analysis.ipynb 3 --max-chars 4000
-```
-
-## Notebook edit commands
-
-```bash
-python -m mip_jupyter_dev.jupyter_mcp_cli create-notebook scratch/mcp_probe.ipynb
-python -m mip_jupyter_dev.jupyter_mcp_cli append-markdown scratch/mcp_probe.ipynb "# Probe"
-python -m mip_jupyter_dev.jupyter_mcp_cli append-code scratch/mcp_probe.ipynb "import mip"
-python -m mip_jupyter_dev.jupyter_mcp_cli edit-cell scratch/mcp_probe.ipynb 0 "# Updated" --cell-type markdown
-python -m mip_jupyter_dev.jupyter_mcp_cli open-file scratch/mcp_probe.ipynb
-```
-
-## Execution commands
-
-`run-cell` executes the selected cell **and all prior code cells** in the same kernel (Jupyter-like). Use `run-all-cells` for full-notebook execution.
-
-```bash
-python -m mip_jupyter_dev.jupyter_mcp_cli run-cell scratch/mcp_probe.ipynb 1 --timeout 30
-python -m mip_jupyter_dev.jupyter_mcp_cli run-all-cells scratch/mcp_probe.ipynb --timeout 60
-```
-
-Run cells only when the user asks or validation requires it. Summarize outputs; do not paste large raw outputs.
-
-## MIP metadata commands
-
-```bash
-python -m mip_jupyter_dev.jupyter_mcp_cli mip-env-status
-python -m mip_jupyter_dev.jupyter_mcp_cli mip-catalog-summary --limit 20
-python -m mip_jupyter_dev.jupyter_mcp_cli mip-data-model-summary stroke --version 3.7
-python -m mip_jupyter_dev.jupyter_mcp_cli mip-search-variables stroke "NIHSS" --version 3.7
-python -m mip_jupyter_dev.jupyter_mcp_cli mip-algorithm-summary
-```
-
-CLI data-model lookup uses `stroke --version 3.7`, not a positional `3.7` argument.
+Exploration / bottlenecks: `read-guide --page agent-exploration`. Scripts for
+notebooks should use `# %%` section markers when helpful.
 
 ## Workflow
 
-1. Read `read-guide --page PAGE` only when workflow detail is needed.
-2. `notebook-outline` before targeted `read-cell` calls.
-3. For substantial analysis, build `scratch/*.py` in small steps, verify, then transfer to notebook cells.
-4. Create new notebooks in `scratch/` unless the user names another path.
-5. Edit by index; re-read the affected cell or outline before replying.
+1. `read-guide --page … --topic …` only when needed (skip INDEX/`00` by default)
+2. Outline before `read-cell`
+3. Substantial analysis → small scratch steps → verify → notebook
+4. New notebooks under `scratch/` unless named otherwise
+5. Edit by index; re-read before replying; summarize run outputs
 
-**Next file:** The target notebook you are editing, if any.
+**Next file:** the notebook you are editing, if any.

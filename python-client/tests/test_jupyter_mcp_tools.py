@@ -286,6 +286,7 @@ class TestJupyterMcpTools(unittest.TestCase):
         self.assertTrue(catalog["truncated"])
         self.assertEqual(model["summary"]["code"], "stroke")
         self.assertEqual(model["variables"][0]["code"], "nihss")
+        self.assertEqual(model["groups"], [])
         self.assertEqual(variables["items"][0]["code"], "nihss")
         self.assertEqual(algorithms["counts_by_type"], {"statistics": 1, "model": 1})
 
@@ -308,7 +309,8 @@ class TestJupyterMcpTools(unittest.TestCase):
 
         serialized = json.dumps(result)
         self.assertLessEqual(len(serialized), tools.MAX_RESPONSE_JSON_CHARS)
-        self.assertTrue(result["response_truncated"])
+        self.assertTrue(result["truncated"])
+        self.assertLessEqual(len(result["items"]), tools.MAX_LIST_ITEMS)
         self.assertLessEqual(len(result["items"][0]["label"]), tools.MAX_METADATA_STRING_CHARS)
 
     def test_stroke_recipe_allowlist_includes_preflight_guidance(self):
@@ -321,7 +323,7 @@ class TestJupyterMcpTools(unittest.TestCase):
         self.assertTrue(guide["ok"])
         content = guide["content"]
         self.assertIn("stroke_preflight.py", content)
-        self.assertIn("Do not", content)  # dataset de-duplication
+        self.assertIn("never mix SSR", content)
         self.assertIn("inputdata()", content)
         self.assertIn("examples/algorithm_examples.py", content)
         self.assertIn("scratch-to-notebook", content)

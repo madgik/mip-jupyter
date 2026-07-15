@@ -106,9 +106,16 @@ _codex_base_url = _env("CODEX_VLLM_BASE_URL")
 if _codex_base_url:
     _spawner_env["CODEX_VLLM_BASE_URL"] = _codex_base_url
     _spawner_env["CODEX_VLLM_MODEL"] = _env("CODEX_VLLM_MODEL", DEFAULT_CODEX_MODEL)
+    _spawner_env["CODEX_REASONING_EFFORT"] = _env("CODEX_REASONING_EFFORT", "low")
     _codex_provider = _env("CODEX_VLLM_PROVIDER")
     if _codex_provider:
         _spawner_env["CODEX_VLLM_PROVIDER"] = _codex_provider
+    _codex_context = _env("CODEX_MODEL_CONTEXT_WINDOW")
+    if _codex_context:
+        _spawner_env["CODEX_MODEL_CONTEXT_WINDOW"] = _codex_context
+    _codex_compact = _env("CODEX_AUTO_COMPACT_TOKEN_LIMIT")
+    if _codex_compact:
+        _spawner_env["CODEX_AUTO_COMPACT_TOKEN_LIMIT"] = _codex_compact
 c.KubeSpawner.environment = _spawner_env
 
 # Persistence configuration.
