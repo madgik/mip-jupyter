@@ -156,6 +156,9 @@ analysis_set = mip.AnalysisSet(
     variables=[age, mmse],
 )
 
+# Shorthand from a data model (labels or objects):
+analysis_set = dm.select(datasets=["ADNI"], variables=["Age", "MMSE"])
+
 analysis_set.summary()
 analysis_set.explain()
 analysis_set.histogram(variable=mmse, bins=20)

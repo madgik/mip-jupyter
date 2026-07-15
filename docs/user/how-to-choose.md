@@ -23,6 +23,7 @@ Selection and display use **human-readable labels** only (for example `"Age"`, `
 | Find algorithms | `client.algorithms().search("logistic")` |
 | Tabular preview of algorithms | `client.algorithms().to_frame()` |
 | Preview analysis selection | `analysis_set.summary()` or `analysis_set.explain()` |
+| Build selection quickly | `dm.select(datasets=["ADNI"], variables=["Age", "MMSE"])` |
 | Preview the full request | `pipeline.explain()` |
 | Get algorithm suggestions | `pipeline.recommend_algorithms()` |
 | Understand results | `result.highlights()`, `result.to_frame()`, `result.summary()` |

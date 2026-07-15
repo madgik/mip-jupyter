@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 from typing import Mapping
+from typing import Sequence
 
+from .datasets import Dataset
 from .datasets import DatasetCollection
 from .display import HelpText
 from .labels import list_group_summaries
 from .labels import normalize_label
+from .variables import Variable
 from .variables import VariableCollection
 
 
@@ -49,6 +52,7 @@ class DataModel:
             },
             [
                 ".summary()",
+                ".select(datasets=[...], variables=[...])",
                 ".datasets.list()",
                 ".variables.search(\"Age\")",
                 ".tree()",
@@ -60,6 +64,26 @@ class DataModel:
         from .display import show_help
 
         return show_help("DataModel")
+
+    def select(
+        self,
+        *,
+        datasets: Sequence[Any],
+        variables: Sequence[Any],
+    ):
+        """Build an AnalysisSet from dataset/variable labels or objects."""
+        from .analysis import AnalysisSet
+
+        if not datasets:
+            raise ValueError("select() requires at least one dataset.")
+        if not variables:
+            raise ValueError("select() requires at least one variable.")
+
+        return AnalysisSet(
+            data_model=self,
+            datasets=[_resolve_dataset(self, item) for item in datasets],
+            variables=[_resolve_variable(self, item) for item in variables],
+        )
 
     @property
     def name(self) -> str:
@@ -166,3 +190,15 @@ def _flatten_variables(data: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     for group in data.get("groups") or []:
         visit_group(group)
     return items
+
+
+def _resolve_dataset(model: DataModel, item: Any) -> Dataset:
+    if isinstance(item, Dataset):
+        return item
+    return model.datasets[str(item)]
+
+
+def _resolve_variable(model: DataModel, item: Any) -> Variable:
+    if isinstance(item, Variable):
+        return item
+    return model.variables[str(item)]

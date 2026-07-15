@@ -74,3 +74,23 @@ class Catalog:
         from .display import show_help
 
         return show_help("Catalog")
+
+    def _repr_html_(self) -> str:
+        from .display import render_object_card
+
+        summaries = self.summaries()
+        labels = ", ".join(
+            str(item.get("label") or "")
+            for item in summaries[:8]
+            if item.get("label")
+        )
+        if len(summaries) > 8:
+            labels += f", … (+{len(summaries) - 8})"
+        fields = {"data_models": len(summaries)}
+        if labels:
+            fields["labels"] = labels
+        return render_object_card(
+            "Catalog",
+            fields,
+            [".summaries()", ".tree()", '.data_model("Dementia")', ".help()"],
+        )

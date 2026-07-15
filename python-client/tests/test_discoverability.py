@@ -113,6 +113,21 @@ class TestDiscoverability(unittest.TestCase):
         self.assertIn("numerical", text)
         self.assertIn("categorical", text)
         self.assertIn("histogram", text)
+        html = text._repr_html_()
+        self.assertIn("<table", html)
+        self.assertIn("histogram", html)
+
+    def test_data_model_select(self):
+        analysis_set = self.dm.select(datasets=["ADNI"], variables=["Age", "MMSE"])
+        self.assertEqual(analysis_set.summary()["datasets"], ["ADNI"])
+        self.assertEqual(analysis_set.summary()["variables"], ["Age", "MMSE"])
+        mixed = self.dm.select(datasets=[self.adni], variables=[self.age, "MMSE"])
+        self.assertEqual(mixed.summary()["variables"], ["Age", "MMSE"])
+
+    def test_catalog_repr_html(self):
+        html = self.catalog._repr_html_()
+        self.assertIn("Catalog", html)
+        self.assertIn("Dementia", html)
 
     def test_result_help_and_repr_html(self):
         result = Result(raw={"bins": [1, 2], "counts": [3, 4]}, result_type="histogram")

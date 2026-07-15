@@ -18,6 +18,7 @@ from mip.preprocessing import CategoricalColumnCreator, MissingValuesHandler, Ou
 client = mip.Client.from_env()
 dm = client.catalog().data_model("Dementia", version="0.1")  # version optional
 dm.datasets["ADNI"]; dm.variables["Age"]; dm.variables.search("MMSE")
+dm.select(datasets=["ADNI"], variables=["Age", "MMSE"])
 dm.help(); pipeline.help(); pipeline.recommend_algorithms()
 variable.details(); variable.categories()
 dm.tree()  # collapsible HTML in notebooks; str(...) for ASCII

@@ -45,11 +45,12 @@ Useful methods:
 - dm.variables.numerical()    numeric variables only
 - dm.variables.categorical()  categorical variables only
 - dm.tree()                   collapsible HTML hierarchy (ASCII via str())
+- dm.select(datasets=[...], variables=[...])  build an AnalysisSet
 - dm.variables.tree(group="Demographics")
 
 Typical next step:
-  age = dm.variables["Age"]
-  age.summary()""",
+  analysis_set = dm.select(datasets=["ADNI"], variables=["Age", "MMSE"])
+  pipeline = mip.Pipeline(analysis_set=analysis_set)""",
     "Dataset": """\
 Dataset help
 
@@ -249,11 +250,17 @@ def to_frame(items: Iterable[Any]):
     return pd.DataFrame(rows)
 
 
-def recommend_pipeline_steps(variables: Sequence[Any]) -> str:
+def recommend_pipeline_steps(variables: Sequence[Any]) -> RecommendationText:
     """Suggest pipeline methods based on selected variable types."""
     lines = ["Based on your selected variables:"]
+    kinds: list[tuple[str, str]] = []
     numerical: list[Any] = []
     categorical: list[Any] = []
+    steps: list[str] = [
+        "pipeline.describe()",
+        "pipeline.explain()",
+        "pipeline.available_algorithms()",
+    ]
 
     for variable in variables:
         label = public_label(variable)
@@ -267,31 +274,73 @@ def recommend_pipeline_steps(variables: Sequence[Any]) -> str:
             categorical.append(variable)
         else:
             kind = "unknown"
+        kinds.append((label, kind))
         lines.append(f"- {label}: {kind}")
 
     lines.append("")
     lines.append("Possible next steps:")
-    lines.append("- pipeline.describe()")
-    lines.append("- pipeline.explain()")
-    lines.append("- pipeline.available_algorithms()")
+    for step in steps:
+        lines.append(f"- {step}")
 
     if numerical:
         first = public_label(numerical[0])
-        lines.append(f'- pipeline.histogram(variable=variables["{first}"])')
+        step = f'pipeline.histogram(variable=variables["{first}"])'
+        steps.append(step)
+        lines.append(f"- {step}")
     if len(numerical) >= 2:
         x = public_label(numerical[0])
         y = public_label(numerical[1])
-        lines.append(f'- pipeline.pearson_correlation(x=variables["{x}"], y=variables["{y}"])')
+        step = f'pipeline.pearson_correlation(x=variables["{x}"], y=variables["{y}"])'
+        steps.append(step)
+        lines.append(f"- {step}")
     if categorical and numerical:
         xs = ", ".join(f'variables["{public_label(item)}"]' for item in numerical[:2])
         y = public_label(categorical[0])
-        lines.append(f'- pipeline.logistic_regression(x=[{xs}], y=variables["{y}"], positive_class=...)')
+        step = f'pipeline.logistic_regression(x=[{xs}], y=variables["{y}"], positive_class=...)'
+        steps.append(step)
+        lines.append(f"- {step}")
     elif len(categorical) >= 2:
         x = public_label(categorical[0])
         y = public_label(categorical[1])
-        lines.append(f'- pipeline.chi_square_test(x=variables["{x}"], y=variables["{y}"])')
+        step = f'pipeline.chi_square_test(x=variables["{x}"], y=variables["{y}"])'
+        steps.append(step)
+        lines.append(f"- {step}")
 
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    kind_rows = "".join(
+        f"<tr><td>{escape_html(label)}</td><td>{escape_html(kind)}</td></tr>"
+        for label, kind in kinds
+    )
+    step_items = "".join(f"<li><code>{escape_html(step)}</code></li>" for step in steps)
+    html = (
+        '<div style="font-family:monospace;font-size:13px;line-height:1.4">'
+        "<p><strong>Recommended next steps</strong></p>"
+        f"<table><thead><tr><th>variable</th><th>kind</th></tr></thead>"
+        f"<tbody>{kind_rows}</tbody></table>"
+        f"<p><strong>Try</strong></p><ul>{step_items}</ul>"
+        "</div>"
+    )
+    return RecommendationText(text, html=html)
+
+
+class RecommendationText(str):
+    """Notebook-friendly algorithm recommendations from Pipeline.recommend_algorithms()."""
+
+    def __new__(cls, text: str, *, html: str | None = None):
+        instance = super().__new__(cls, text)
+        instance._html = html
+        return instance
+
+    def _repr_html_(self) -> str:
+        if self._html:
+            return self._html
+        return f"<pre style=\"white-space:pre-wrap\">{escape_html(str(self))}</pre>"
+
+    def _repr_pretty_(self, p, cycle) -> None:
+        if cycle:
+            p.text("RecommendationText(...)")
+            return
+        p.text(str(self))
 
 
 _RESULT_TABLE_PREVIEW_ROWS = 12
