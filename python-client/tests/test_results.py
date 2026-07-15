@@ -2,6 +2,8 @@ import unittest
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import pandas as pd
+
 from mip.exceptions import UnsupportedOperationError
 from mip.results import ModelResult
 from mip.results import Result
@@ -185,6 +187,18 @@ class TestResults(unittest.TestCase):
         with patch("matplotlib.pyplot.subplots", return_value=(figure, axis)):
             chi.plot()
         axis.bar.assert_called_once()
+
+    def test_to_frame_keeps_numeric_dtypes_for_styler(self):
+        result = Result(
+            raw={"u_stat": 84037773.0, "z_score": 18.46, "p_value": 1e-8, "n1": 19952, "n2": 7356},
+            result_type="binned_mann_whitney_u_test",
+        )
+        frame = result.to_frame()
+        self.assertTrue(pd.api.types.is_numeric_dtype(frame["u_stat"]))
+        self.assertTrue(pd.api.types.is_numeric_dtype(frame["p_value"]))
+        # Styler must not raise Unknown format code 'f' for str.
+        html = frame.style.format({"u_stat": "{:.2f}", "p_value": "{:.4g}"}).to_html()
+        self.assertIn("84037773", html)
 
 
 if __name__ == "__main__":

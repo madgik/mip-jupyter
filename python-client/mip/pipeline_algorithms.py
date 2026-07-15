@@ -73,6 +73,7 @@ class PipelineAlgorithmsMixin:
             },
             mode=mode,
             name_for_ui=f"T-test: {public_label(variable)}",
+            result_type="t_test",
         )
 
     def one_sample_t_test(
@@ -94,6 +95,7 @@ class PipelineAlgorithmsMixin:
             },
             mode=mode,
             name_for_ui=f"One-sample t-test: {public_label(variable)}",
+            result_type="one_sample_t_test",
         )
 
     def paired_t_test(
@@ -117,6 +119,7 @@ class PipelineAlgorithmsMixin:
             name_for_ui=(
                 f"Paired t-test: {public_label(measurement_1)} vs {public_label(measurement_2)}"
             ),
+            result_type="paired_t_test",
         )
 
     def pearson_correlation(
@@ -144,6 +147,7 @@ class PipelineAlgorithmsMixin:
             parameters={},
             mode=mode,
             name_for_ui=f"Chi-square test: {public_label(x)} vs {public_label(y)}",
+            result_type="chi_square_test",
         )
 
     def fisher_exact(self, *, x: Any, y: Any, mode: str = "transient") -> Result:
@@ -154,6 +158,7 @@ class PipelineAlgorithmsMixin:
             parameters={},
             mode=mode,
             name_for_ui=f"Fisher exact test: {public_label(x)} vs {public_label(y)}",
+            result_type="fisher_exact",
         )
 
     def quartiles(
@@ -233,6 +238,7 @@ class PipelineAlgorithmsMixin:
             parameters=parameters,
             mode=mode,
             name_for_ui=f"Mann-Whitney U test: {public_label(variable)}",
+            result_type="mann_whitney_u_test",
         )
 
     def outlier_report(

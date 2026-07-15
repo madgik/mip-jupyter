@@ -483,14 +483,17 @@ def _pick_fields(payload: Mapping[str, Any], keys: Sequence[str]) -> dict[str, A
 
 
 def _fmt_number(value: Any) -> Any:
+    """Keep numeric values numeric so DataFrame stylers can format them."""
     if isinstance(value, bool) or value is None:
         return value
-    if isinstance(value, float):
-        if value != value:  # NaN
-            return value
-        if abs(value) >= 1000 or (abs(value) > 0 and abs(value) < 0.001):
-            return f"{value:.4g}"
-        return round(value, 6)
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if number != number:  # NaN
+            return number
+        # Preserve integers that fit exactly; otherwise round for stable display.
+        if isinstance(value, int) or number.is_integer():
+            return int(number) if abs(number) < 1e15 else number
+        return round(number, 10)
     return value
 
 
