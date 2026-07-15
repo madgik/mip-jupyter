@@ -128,25 +128,30 @@ Typical next step:
 Result help
 
 Useful methods:
-- result.summary()   backend result payload (same as .raw)
-- result.raw         raw result dict or value
-- result.payload     full experiment response
-- result.plot()      matplotlib chart (histogram results only)
+- result.highlights() key metrics for this algorithm
+- result.to_frame()   tabular preview of the main result table
+- result.summary()    backend result payload (same as .raw)
+- result.raw          raw result dict or value
+- result.payload      full experiment response
+- result.plot()       matplotlib chart (histogram results)
 
 Typical next step:
-  result.summary()""",
+  result.to_frame()
+  result.plot()  # histogram only""",
     "ModelResult": """\
 ModelResult help
 
 Useful methods:
-- result.summary()      backend result payload
-- result.raw            raw result dict
-- result.payload        full experiment response
-- result.feature_schema()  feature names from logistic regression
-- result.to_sklearn()   export as sklearn classifier (logistic only)
+- result.highlights()     key metrics (N, coefficient count, …)
+- result.to_frame()       coefficient table with p-values / CIs when present
+- result.summary()        backend result payload
+- result.raw              raw result dict
+- result.payload          full experiment response
+- result.feature_schema() feature names from logistic regression
+- result.to_sklearn()     export as sklearn classifier (logistic only)
 
 Typical next step:
-  result.summary()""",
+  result.to_frame()""",
     "AlgorithmRegistry": """\
 AlgorithmRegistry help
 
@@ -287,3 +292,237 @@ def recommend_pipeline_steps(variables: Sequence[Any]) -> str:
         lines.append(f'- pipeline.chi_square_test(x=variables["{x}"], y=variables["{y}"])')
 
     return "\n".join(lines)
+
+
+_RESULT_TABLE_PREVIEW_ROWS = 12
+
+
+def result_highlights(result_type: str | None, raw: Any) -> dict[str, Any]:
+    """Pick a compact set of key metrics for notebook Result cards."""
+    payload = raw if isinstance(raw, dict) else {}
+    kind = str(result_type or "").strip().lower()
+
+    if kind == "describe":
+        rows = payload.get("featurewise") or []
+        return {
+            "variables": len(rows) if isinstance(rows, list) else 0,
+            "hint": "Use .to_frame() for per-variable stats",
+        }
+
+    if kind == "histogram":
+        bins, counts = histogram_bins_counts(payload)
+        total = sum(float(value) for value in counts) if counts else None
+        return {
+            "bins": len(bins) if bins else 0,
+            "total_count": _fmt_number(total),
+            "hint": "Call .plot() for a bar chart",
+        }
+
+    if kind in {"t_test", "one_sample_t_test", "paired_t_test", "mann_whitney_u_test"}:
+        return _pick_fields(
+            payload,
+            ("t_stat", "p", "mean_diff", "cohens_d", "n_obs", "df"),
+        )
+
+    if kind in {"chi_square_test", "fisher_exact"}:
+        return _pick_fields(payload, ("chi2", "odds_ratio", "p_value", "dof", "n_obs"))
+
+    if kind == "pearson_correlation":
+        return _pick_fields(payload, ("title", "n_obs", "correlation", "p_value", "p"))
+
+    if kind in {"logistic_regression", "logistic_regression_cv"}:
+        summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else payload
+        names = summary.get("feature_names") if isinstance(summary, dict) else None
+        return {
+            "n_obs": summary.get("n_obs") if isinstance(summary, dict) else None,
+            "features": len(names) if isinstance(names, list) else None,
+            "hint": "Use .to_frame() for coefficients",
+        }
+
+    if kind in {"linear_regression", "linear_regression_cv"}:
+        return _pick_fields(payload, ("n_obs", "r2", "rmse", "intercept"))
+
+    if not payload:
+        return {"hint": "Call .summary() for the backend payload"}
+    keys = list(payload.keys())[:6]
+    return {"keys": ", ".join(str(key) for key in keys), "hint": "Use .to_frame() or .summary()"}
+
+
+def result_table_rows(result_type: str | None, raw: Any) -> list[dict[str, Any]]:
+    """Normalize common algorithm payloads into tabular row dicts."""
+    payload = raw if isinstance(raw, dict) else {}
+    kind = str(result_type or "").strip().lower()
+
+    if kind == "describe":
+        return _describe_rows(payload)
+    if kind == "histogram":
+        return _histogram_rows(payload)
+    if kind in {"logistic_regression", "logistic_regression_cv"}:
+        return _logistic_rows(payload)
+    if kind in {"t_test", "one_sample_t_test", "paired_t_test", "mann_whitney_u_test"}:
+        return [_pick_fields(payload, ("t_stat", "p", "mean_diff", "cohens_d", "n_obs", "df"))]
+    if kind in {"chi_square_test", "fisher_exact"}:
+        return [_pick_fields(payload, ("chi2", "odds_ratio", "p_value", "dof", "n_obs"))]
+    if kind == "pearson_correlation":
+        return _pearson_rows(payload)
+    if kind in {"linear_regression", "linear_regression_cv"}:
+        return _linear_rows(payload)
+    return []
+
+
+def render_result_card(
+    *,
+    result_type: str | None,
+    raw: Any,
+    methods: Sequence[str] | None = None,
+) -> str:
+    """Render an algorithm-aware HTML card for a Result object."""
+    highlights = {
+        key: value
+        for key, value in result_highlights(result_type, raw).items()
+        if value is not None and value != ""
+    }
+    title = f"Result: {result_type or 'unknown'}"
+    rows = result_table_rows(result_type, raw)
+    preview = _render_html_table(rows[:_RESULT_TABLE_PREVIEW_ROWS])
+    card = render_object_card(title, highlights, methods)
+    if not preview:
+        return card
+    return f"{card}<p><strong>Preview</strong></p>{preview}"
+
+
+def _pick_fields(payload: Mapping[str, Any], keys: Sequence[str]) -> dict[str, Any]:
+    return {key: _fmt_number(payload.get(key)) for key in keys if key in payload}
+
+
+def _fmt_number(value: Any) -> Any:
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, float):
+        if value != value:  # NaN
+            return value
+        if abs(value) >= 1000 or (abs(value) > 0 and abs(value) < 0.001):
+            return f"{value:.4g}"
+        return round(value, 6)
+    return value
+
+
+def _describe_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for item in payload.get("featurewise") or []:
+        if not isinstance(item, Mapping):
+            continue
+        data = item.get("data") if isinstance(item.get("data"), Mapping) else {}
+        rows.append(
+            {
+                "variable": item.get("variable"),
+                "dataset": item.get("dataset"),
+                "n": data.get("num_dtps"),
+                "mean": _fmt_number(data.get("mean")),
+                "std": _fmt_number(data.get("std")),
+                "min": _fmt_number(data.get("min")),
+                "max": _fmt_number(data.get("max")),
+            }
+        )
+    return rows
+
+
+def histogram_bins_counts(payload: Mapping[str, Any]) -> tuple[list[Any], list[Any]]:
+    """Extract plottable bins/counts from common histogram payload shapes."""
+    bins = payload.get("bins") or payload.get("x")
+    counts = payload.get("counts") or payload.get("y")
+    histogram = payload.get("histogram")
+    if bins is None and isinstance(histogram, dict):
+        bins = histogram.get("bins")
+        counts = histogram.get("counts")
+    if bins is None and isinstance(histogram, list) and histogram:
+        first = histogram[0]
+        if isinstance(first, dict):
+            bins = first.get("bins")
+            counts = first.get("counts")
+    if not bins or not counts:
+        return [], []
+    return list(bins), list(counts)
+
+
+def _histogram_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    bins, counts = histogram_bins_counts(payload)
+    return [{"bin": bin_value, "count": count} for bin_value, count in zip(bins, counts)]
+
+
+def _logistic_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else payload
+    if not isinstance(summary, Mapping):
+        return []
+    names = summary.get("feature_names") or payload.get("feature_names") or []
+    coefficients = summary.get("coefficients") or payload.get("coefficients") or []
+    if not isinstance(names, list) or not isinstance(coefficients, list):
+        return []
+    pvalues = summary.get("pvalues") or summary.get("p_values") or []
+    lower = summary.get("lower_ci") or summary.get("conf_int_lower") or []
+    upper = summary.get("upper_ci") or summary.get("conf_int_upper") or []
+    rows: list[dict[str, Any]] = []
+    for index, name in enumerate(names):
+        row: dict[str, Any] = {
+            "feature": name,
+            "coefficient": _fmt_number(coefficients[index] if index < len(coefficients) else None),
+        }
+        if isinstance(pvalues, list) and index < len(pvalues):
+            row["p"] = _fmt_number(pvalues[index])
+        if isinstance(lower, list) and index < len(lower):
+            row["lower_ci"] = _fmt_number(lower[index])
+        if isinstance(upper, list) and index < len(upper):
+            row["upper_ci"] = _fmt_number(upper[index])
+        rows.append(row)
+    return rows
+
+
+def _linear_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    names = payload.get("feature_names") or payload.get("indep_vars") or []
+    coefficients = payload.get("coefficients") or payload.get("coef") or []
+    if isinstance(names, list) and isinstance(coefficients, list) and names:
+        return [
+            {
+                "feature": name,
+                "coefficient": _fmt_number(coefficients[index] if index < len(coefficients) else None),
+            }
+            for index, name in enumerate(names)
+        ]
+    return [_pick_fields(payload, ("n_obs", "r2", "rmse", "intercept"))]
+
+
+def _pearson_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    correlations = payload.get("correlations")
+    if isinstance(correlations, list):
+        rows: list[dict[str, Any]] = []
+        for item in correlations:
+            if isinstance(item, Mapping):
+                rows.append(dict(item))
+        if rows:
+            return rows
+    if isinstance(correlations, Mapping):
+        return [{"pair": key, "correlation": _fmt_number(value)} for key, value in correlations.items()]
+    return [_pick_fields(payload, ("title", "n_obs", "correlation", "p_value", "p"))]
+
+
+def _render_html_table(rows: Sequence[Mapping[str, Any]]) -> str:
+    if not rows:
+        return ""
+    columns: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for key in row.keys():
+            if key not in seen:
+                seen.add(key)
+                columns.append(str(key))
+    header = "".join(f"<th>{escape_html(column)}</th>" for column in columns)
+    body_rows = []
+    for row in rows:
+        cells = "".join(f"<td>{escape_html(row.get(column, ''))}</td>" for column in columns)
+        body_rows.append(f"<tr>{cells}</tr>")
+    return (
+        '<table style="border-collapse:collapse;font-family:monospace;font-size:12px">'
+        f"<thead><tr>{header}</tr></thead>"
+        f"<tbody>{''.join(body_rows)}</tbody>"
+        "</table>"
+    )

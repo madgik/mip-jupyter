@@ -336,7 +336,17 @@ result.raw
 result.payload
 ```
 
-Histogram results may support `.plot()`. Unsupported plotting raises `UnsupportedOperationError`.
+Evaluating a `Result` shows algorithm-aware highlights and a tabular preview when
+available. Common helpers:
+
+```python
+result.highlights()
+result.to_frame()
+result.plot()  # histogram only
+```
+
+Histogram results may support `.plot()`. Unsupported plotting or tabular previews
+raise `UnsupportedOperationError`.
 
 Logistic regression results expose:
 

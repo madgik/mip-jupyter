@@ -55,7 +55,8 @@ No `Pipeline.run()`. `new_columns` takes creators. Registries:
 ## Results
 
 ```python
-result.summary(); result.raw; result.payload
+result.highlights(); result.to_frame(); result.summary(); result.raw; result.payload
+# histogram: result.plot()
 # logistic only: result.to_sklearn(), result.feature_schema()
 ```
 

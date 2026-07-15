@@ -71,9 +71,12 @@ pipeline.logistic_regression(x=[age, sex], y=diagnosis, positive_class="Alzheime
 ## Results
 
 ```python
+result.highlights()
+result.to_frame()
 result.summary()
 result.raw
 result.payload
+result.plot()  # histogram only
 logreg.to_sklearn()  # logistic regression only
 ```
 

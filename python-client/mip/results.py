@@ -1,11 +1,17 @@
-"""Raw-first result wrappers."""
+"""Raw-first result wrappers with notebook-friendly previews."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from .exceptions import UnsupportedOperationError
 from .display import HelpText
+from .display import histogram_bins_counts
+from .display import render_result_card
+from .display import result_highlights
+from .display import result_table_rows
+from .display import show_help
+from .display import to_frame
+from .exceptions import UnsupportedOperationError
 from .sklearn import feature_schema_from_logistic_result
 from .sklearn import logistic_regression_to_sklearn
 
@@ -21,21 +27,27 @@ class Result:
     def summary(self) -> Any:
         return self.raw
 
-    def _repr_html_(self) -> str:
-        from .display import render_object_card
+    def highlights(self) -> dict[str, Any]:
+        """Return compact key metrics for this result type."""
+        return result_highlights(self.result_type, self.raw)
 
-        return render_object_card(
-            f"Result: {self.result_type or 'unknown'}",
-            {
-                "result_type": self.result_type,
-                "hint": "Call .summary() for payload; .raw and .payload also available",
-            },
-            [".summary()", ".raw", ".payload", ".help()"],
-        )
+    def to_frame(self):
+        """Return a tabular preview of the primary result table when available."""
+        rows = result_table_rows(self.result_type, self.raw)
+        if not rows:
+            raise UnsupportedOperationError(
+                f"No tabular preview is available for result type {self.result_type!r}. "
+                "Use .summary() or .raw for the backend payload."
+            )
+        return to_frame(rows)
+
+    def _repr_html_(self) -> str:
+        methods = [".highlights()", ".to_frame()", ".summary()", ".raw", ".payload", ".help()"]
+        if self.result_type == "histogram":
+            methods.insert(2, ".plot()")
+        return render_result_card(result_type=self.result_type, raw=self.raw, methods=methods)
 
     def help(self) -> HelpText:
-        from .display import show_help
-
         return show_help("Result")
 
     def plot(self):
@@ -49,9 +61,15 @@ class Result:
         except Exception as exc:
             raise UnsupportedOperationError("Histogram plotting requires matplotlib to be installed.") from exc
         bins, counts = data
+        variable = _histogram_variable(self.raw)
         _figure, axis = plt.subplots()
-        axis.bar(bins, counts)
+        axis.bar(range(len(counts)), counts, tick_label=[str(item) for item in bins])
         axis.set_ylabel("count")
+        axis.set_xlabel(variable or "bin")
+        axis.set_title(f"Histogram{f': {variable}' if variable else ''}")
+        if len(bins) > 8:
+            axis.tick_params(axis="x", labelrotation=45)
+        _figure.tight_layout()
         return axis
 
 
@@ -77,25 +95,44 @@ class ModelResult(Result):
             raise UnsupportedOperationError("Only logistic regression results can be exported to sklearn.")
         return logistic_regression_to_sklearn(self.raw, positive_class=self.positive_class)
 
-    def help(self) -> HelpText:
-        from .display import show_help
+    def _repr_html_(self) -> str:
+        methods = [
+            ".highlights()",
+            ".to_frame()",
+            ".summary()",
+            ".feature_schema()",
+            ".to_sklearn()",
+            ".help()",
+        ]
+        return render_result_card(result_type=self.result_type, raw=self.raw, methods=methods)
 
+    def help(self) -> HelpText:
         return show_help("ModelResult")
 
 
 def _histogram_data(raw: Any):
     payload = raw if isinstance(raw, dict) else {}
-    bins = payload.get("bins") or payload.get("x")
-    counts = payload.get("counts") or payload.get("y")
-    histogram = payload.get("histogram")
-    if bins is None and isinstance(histogram, dict):
-        bins = histogram.get("bins")
-        counts = histogram.get("counts")
-    if bins is None and isinstance(histogram, list) and histogram:
-        first = histogram[0]
-        if isinstance(first, dict):
-            bins = first.get("bins")
-            counts = first.get("counts")
+    bins, counts = histogram_bins_counts(payload)
     if not bins or not counts:
         return None
-    return list(bins), list(counts)
+    return bins, counts
+
+
+def _histogram_variable(raw: Any) -> str | None:
+    payload = raw if isinstance(raw, dict) else {}
+    for key in ("variable", "var", "label"):
+        value = payload.get(key)
+        if value:
+            return str(value)
+    histogram = payload.get("histogram")
+    if isinstance(histogram, dict):
+        for key in ("variable", "var", "label"):
+            value = histogram.get(key)
+            if value:
+                return str(value)
+    if isinstance(histogram, list) and histogram and isinstance(histogram[0], dict):
+        for key in ("variable", "var", "label"):
+            value = histogram[0].get(key)
+            if value:
+                return str(value)
+    return None
