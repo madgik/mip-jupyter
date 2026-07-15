@@ -15,6 +15,17 @@ fi
 
 mkdir -p "${WORK}/scratch"
 
+# Sync shipped scratch templates into existing PVC workspaces without overwriting user files.
+if [ -d "${TEMPLATE}/templates/scratch" ]; then
+  for shipped in "${TEMPLATE}/templates/scratch"/*.py "${TEMPLATE}/templates/scratch"/*.template.md; do
+    [ -f "${shipped}" ] || continue
+    dest="${WORK}/scratch/$(basename "${shipped}")"
+    if [ ! -f "${dest}" ]; then
+      cp "${shipped}" "${dest}"
+    fi
+  done
+fi
+
 # Trust shipped notebooks so execution/output rendering is not blocked in Lab.
 find "${WORK}" -name '*.ipynb' -exec jupyter trust {} + 2>/dev/null || true
 
@@ -26,9 +37,8 @@ if [ -n "${CODEX_VLLM_BASE_URL:-}" ]; then
   rm -rf "${CODEX_HOME}"
   python -m mip_jupyter_dev.codex_bootstrap "${CODEX_HOME}" "${JUPYTER_AI_CONFIG}" --mcp-port "${MCP_PORT}"
   export CODEX_HOME
-  if [ -x "${CODEX_HOME}/bin/codex-acp" ]; then
-    export PATH="${CODEX_HOME}/bin:${PATH}"
-  fi
+  export PATH="${CODEX_HOME}/bin:${PATH}"
+  export SHELL="${CODEX_HOME}/bin/mip-shell-guard"
 else
   python -m mip_jupyter_dev.jupyter_mcp_config "${JUPYTER_AI_CONFIG}" --mcp-port "${MCP_PORT}"
 fi

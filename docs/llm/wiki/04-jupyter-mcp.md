@@ -4,28 +4,78 @@
 
 **Skip if:** The user only asks about MIP analysis API (see `03-mip-client-api.md`).
 
-Off-topic requests (recipes, trivia, unrelated projects) are out of scope — see `00-agent-workspace.md`. Do not call MCP tools for them.
+Off-topic requests are out of scope — see `00-agent-workspace.md`.
 
 ## Why the shell bridge
 
-qwen36-nvfp4 rejects native Responses `mcp` tool payloads on qwen vLLM. Codex calls the same curated Jupyter MCP tools through:
+The vLLM Responses shim rejects native `mcp` tool payloads. Codex calls curated tools through:
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli <command> ...
 ```
 
-`JUPYTER_MCP_URL` is set by the notebook runner. Do not ask the user to paste notebook cells manually.
+`JUPYTER_MCP_URL` is set by the notebook runner.
+
+## Tool payload safety (vLLM)
+
+Keep every tool-call argument **small and valid JSON**. One command per turn when possible.
+
+### Forbidden
+
+- `write_stdin` for multi-line code
+- Heredocs: `cat > file << 'EOF'`
+- Shell redirects into `scratch/` or `workspace/`
+- Giant `python -c "..."` blocks (more than a few lines)
+- Piping large bodies via `--content-file -`
+- `--content-file` paths outside the Jupyter workspace
+- `cat notebook.ipynb | python -c` to parse JSON
+- Replaying 500+ line scripts after compaction
+
+### Safe patterns
+
+1. Bounded discovery: `mip-env-status`, `mip-data-model-summary`, `mip-search-variables`
+2. `notebook-outline` then `read-cell` with `--max-chars`
+3. Novel/multi-step analysis:
+   - `scratch-copy-template scratch/<name>.py`
+   - `scratch-append-lines` / `scratch-replace-snippet` for small edits
+   - `python scratch/<name>.py` to verify
+   - `scratch-to-notebook scratch/<name>.py scratch/<name>.ipynb --title "<name>"`
+4. Transfer verified flow into notebook cells incrementally
+
+`--content-file path` is for modest cell bodies from a **workspace-relative** path only. For substantial code, use scratch tools — not shell writes.
+
+### Recovery
+
+If Cohort Scout reports a **tool-call formatting error**, start a **new chat** and retry with a smaller step. Resume from existing `scratch/*.py` artifacts instead of regenerating large scripts. Your notebook and MIP connection are unaffected.
+
+## Scratch edit commands
+
+```bash
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-init
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-copy-file scratch/_session.md scratch/_session.template.md
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-read scratch/_session.md --max-chars 4000
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-copy-template scratch/my_analysis.py --source examples/algorithm_examples.py
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-append-lines scratch/my_analysis.py "# comment"
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-replace-snippet scratch/my_analysis.py "OLD" "NEW"
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-to-notebook scratch/my_analysis.py scratch/my_analysis.ipynb --title "My analysis"
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-list
+python -m mip_jupyter_dev.jupyter_mcp_cli scratch-log-bottleneck t_test failed platform_error "full error message"
+```
+
+Exploration workflow and bottleneck taxonomy: `read-guide --page agent-exploration`.
+
+Scripts transferred to notebooks should include `# %%` section markers when splitting cells (see `examples/algorithm_examples.py`).
 
 ## Context commands
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli read-guide
+python -m mip_jupyter_dev.jupyter_mcp_cli read-guide --page index
+python -m mip_jupyter_dev.jupyter_mcp_cli read-guide --page recipes/stroke-analysis --topic "pipeline"
 python -m mip_jupyter_dev.jupyter_mcp_cli search-docs "Client.from_env"
 python -m mip_jupyter_dev.jupyter_mcp_cli notebook-outline workspace/examples/feres_analysis.ipynb
 python -m mip_jupyter_dev.jupyter_mcp_cli read-cell workspace/examples/feres_analysis.ipynb 3 --max-chars 4000
 ```
-
-`notebook-outline` returns cell indexes, headings, source previews, and output/error counts. It does not return full outputs.
 
 ## Notebook edit commands
 
@@ -37,39 +87,35 @@ python -m mip_jupyter_dev.jupyter_mcp_cli edit-cell scratch/mcp_probe.ipynb 0 "#
 python -m mip_jupyter_dev.jupyter_mcp_cli open-file scratch/mcp_probe.ipynb
 ```
 
-Multi-line cell content: use `--content-file path` or pipe via `--content-file -`.
-
 ## Execution commands
+
+`run-cell` executes the selected cell **and all prior code cells** in the same kernel (Jupyter-like). Use `run-all-cells` for full-notebook execution.
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli run-cell scratch/mcp_probe.ipynb 1 --timeout 30
 python -m mip_jupyter_dev.jupyter_mcp_cli run-all-cells scratch/mcp_probe.ipynb --timeout 60
 ```
 
-Run cells only when the user asks or validation requires it. Summarize outputs and errors; do not paste large raw outputs.
+Run cells only when the user asks or validation requires it. Summarize outputs; do not paste large raw outputs.
 
 ## MIP metadata commands
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli mip-env-status
 python -m mip_jupyter_dev.jupyter_mcp_cli mip-catalog-summary --limit 20
-python -m mip_jupyter_dev.jupyter_mcp_cli mip-data-model-summary dementia --version 0.1
+python -m mip_jupyter_dev.jupyter_mcp_cli mip-data-model-summary stroke --version 3.7
 python -m mip_jupyter_dev.jupyter_mcp_cli mip-search-variables stroke "NIHSS" --version 3.7
 python -m mip_jupyter_dev.jupyter_mcp_cli mip-algorithm-summary
 ```
 
-These commands use `mip.Client.from_env()` and MIP platform metadata only. They never print token values.
+CLI data-model lookup uses `stroke --version 3.7`, not a positional `3.7` argument.
 
 ## Workflow
 
-1. `read-guide`, then `search-docs` for user-facing docs.
+1. Read `read-guide --page PAGE` only when workflow detail is needed.
 2. `notebook-outline` before targeted `read-cell` calls.
-3. For substantial examples or multi-step analysis notebooks, first build the step sequence in plain Python under `scratch/` or another temporary Python file.
-4. Run or otherwise verify the Python flow until it works.
-5. Transfer the verified steps into notebook cells with markdown explanations only after the Python version is ready.
-6. Create new notebooks in `scratch/` unless the user names another path.
-7. Edit by index, then re-read the affected cell or outline before replying.
-
-Legacy aliases still exist for `add-markdown`, `add-code`, and `read-notebook`, but prefer the commands above.
+3. For substantial analysis, build `scratch/*.py` in small steps, verify, then transfer to notebook cells.
+4. Create new notebooks in `scratch/` unless the user names another path.
+5. Edit by index; re-read the affected cell or outline before replying.
 
 **Next file:** The target notebook you are editing, if any.

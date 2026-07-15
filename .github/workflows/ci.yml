@@ -10,15 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install client
-        run: python3 -m pip install -e ./python-client
-      - name: Unit tests
-        run: python3 -m unittest discover -s python-client/tests -p "test_*.py"
+      - name: Install root package and dev deps
+        run: uv sync --extra dev
+      - name: Codex and MCP tests
+        run: |
+          uv run pytest \
+            mip_jupyter_dev/test_codex_bootstrap.py \
+            mip_jupyter_dev/test_jupyter_mcp_cli.py \
+            mip_jupyter_dev/test_shell_guard.py \
+            mip_jupyter_dev/test_stroke_federated.py \
+            python-client/tests/test_jupyter_mcp_tools.py \
+            -q
+      - name: Client unit tests
+        run: uv run python -m unittest discover -s python-client/tests -p "test_*.py"
       - name: Smoke script
-        run: python3 python-client/verify_script.py
+        run: uv run python python-client/verify_script.py
+      - name: Whitespace check
+        run: git diff --check
 
   docker:
     runs-on: ubuntu-latest
@@ -28,3 +40,5 @@ jobs:
         run: docker build --platform linux/amd64 -f docker/singleuser/Dockerfile -t mip-jupyter:ci .
       - name: Build hub image
         run: docker build --platform linux/amd64 -f docker/hub/Dockerfile -t mip-jupyterhub:ci .
+      - name: Single-user image smoke
+        run: scripts/smoke-singleuser-image.sh mip-jupyter:ci

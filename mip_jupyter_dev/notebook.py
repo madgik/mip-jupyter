@@ -19,6 +19,7 @@ from .codex_bootstrap import (
     DEFAULT_CODEX_PROVIDER,
     DEFAULT_CODEX_CONTEXT_WINDOW,
     DEFAULT_CODEX_AUTO_COMPACT_LIMIT,
+    DEFAULT_CODEX_REASONING_EFFORT,
     DEFAULT_MCP_PORT,
     CodexSettings,
     bootstrap_codex,
@@ -84,6 +85,23 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+def _sync_scratch_templates(repo: Path) -> None:
+    """Mirror templates/scratch into workspace/scratch for local Jupyter parity."""
+    src = repo / "workspace" / "templates" / "scratch"
+    dest = repo / "workspace" / "scratch"
+    if not src.is_dir():
+        return
+    dest.mkdir(parents=True, exist_ok=True)
+    for path in sorted(src.iterdir()):
+        if not path.is_file():
+            continue
+        if path.suffix not in {".py", ".md"}:
+            continue
+        target = dest / path.name
+        if not target.exists():
+            shutil.copy2(path, target)
+
+
 def _sync_workspace_user_docs(repo: Path) -> None:
     """Mirror docs/user into workspace/docs for local Jupyter parity with production."""
     src = repo / "docs" / "user"
@@ -125,16 +143,21 @@ def _parser() -> argparse.ArgumentParser:
         default=int(os.getenv("CODEX_AUTO_COMPACT_TOKEN_LIMIT", str(DEFAULT_CODEX_AUTO_COMPACT_LIMIT))),
     )
     parser.add_argument(
+        "--codex-reasoning-effort",
+        default=os.getenv("CODEX_REASONING_EFFORT", DEFAULT_CODEX_REASONING_EFFORT),
+        choices=("minimal", "low", "medium"),
+    )
+    parser.add_argument(
         "--disable-jupyter-mcp",
         action="store_true",
         default=_env_flag("CODEX_DISABLE_NATIVE_JUPYTER_MCP"),
-        help="Disable native MCP forwarding to Codex. This is the default for qwen vLLM.",
+        help="Disable native MCP forwarding to Codex. This is the default for vLLM shell-bridge mode.",
     )
     parser.add_argument(
         "--enable-native-jupyter-mcp",
         action="store_true",
         default=_env_flag("CODEX_ENABLE_NATIVE_JUPYTER_MCP"),
-        help="Forward Jupyter MCP as native Responses MCP tools. Do not use with qwen vLLM.",
+        help="Forward Jupyter MCP as native Responses MCP tools. Do not use with the vLLM shell bridge.",
     )
     return parser
 
@@ -148,6 +171,7 @@ def _codex_settings_from_args(args: argparse.Namespace) -> CodexSettings:
         provider=args.codex_provider,
         context_window=args.codex_context_window,
         auto_compact_limit=args.codex_auto_compact_limit,
+        reasoning_effort=args.codex_reasoning_effort,
         mcp_port=args.mcp_port,
         enable_native_jupyter_mcp=native_mcp_forwarding,
     )
@@ -159,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
         args.mcp_port = _choose_mcp_port()
     root = _repo_root()
     _sync_workspace_user_docs(root)
+    _sync_scratch_templates(root)
 
     env = os.environ.copy()
     env.setdefault("MIP_JUPYTER_ROOT", str(root / "workspace"))
@@ -200,6 +225,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Jupyter AI persona: {MIP_PERSONA_NAME}")
         print(f"CODEX_HOME={codex_home}")
         print(f"Codex model: {settings.model}")
+        print(f"Codex reasoning effort: {settings.reasoning_effort}")
         print(f"Codex catalog models: {', '.join(settings.catalog_models)}")
         print(f"Codex provider: {settings.provider}")
         print(f"Codex base_url: {settings.base_url}")

@@ -90,6 +90,22 @@ result.payload
 
 Logistic regression also supports `result.to_sklearn()` and `result.feature_schema()`.
 
+## Common pitfalls
+
+- Use `Client.from_env()`, not `Client()`.
+- Access datasets and variables with brackets: `dm.datasets["SSR"]`, `dm.variables["Age"]`.
+- No `Pipeline.run()` — call algorithm methods on the pipeline directly.
+- Pass **creators** in `new_columns=[creator]`; use `creator.variable` in algorithms only.
+- `default_enumeration` must match t-test `group_b` labels.
+- Describe stats are under `featurewise[].data`, not top-level `mean`.
+- T-test p-value key is `p`; chi-square uses `p_value`.
+- `pearson_correlation` may fail on the platform — prefer logistic regression or skip.
+- Federated analyses return aggregates only; do not assume raw row extraction.
+
+For stroke-specific patterns and significance guardrails, read `recipes/stroke-analysis.md` only.
+
+For the full algorithm catalog and minimal examples, read `07-pipeline-algorithms.md`.
+
 ## Reference notebook
 
 `workspace/examples/feres_analysis.ipynb` demonstrates stroke territory cohort analysis with `CategoricalColumnCreator`.

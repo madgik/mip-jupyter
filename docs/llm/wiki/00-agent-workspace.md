@@ -58,6 +58,7 @@ When replying to researchers in chat or notebook markdown:
 - Start with `Welcome.ipynb` for first steps and a quick MIP connection check.
 - Use `examples/` for canonical examples. Read or explain them freely, but edit them only when the user explicitly asks.
 - Put new or exploratory work in `scratch/`. If the user asks for a notebook without a path, create it there.
+- Shipped scratch templates live in `templates/scratch/` in the repo and sync into `scratch/` at runtime.
 - Use `docs/` in the user workspace for user-facing help (`agent_search_docs`). Do not read `docs/user/` from the repo filesystem in production — it is copied into the user workspace at `docs/`.
 
 ## MIP platform rules
@@ -71,13 +72,22 @@ When replying to researchers in chat or notebook markdown:
 
 Use the smallest source that can answer the question:
 
-1. `agent_read_guide` (this document) on first turn.
-2. `agent_search_docs(query)` for user docs in `docs/`.
-3. `notebook_outline(path)` before reading notebook cells.
-4. `notebook_read_cell(path, index)` for targeted cell reads.
-5. MIP metadata tools for live catalog and algorithm facts.
-6. Agent wiki pages under `docs/llm/wiki/` (Cursor) or `/opt/mip-agent-docs/llm/wiki/` (production MCP) for workflow and API depth.
-7. Ask the user only when intent or required data is not discoverable.
+1. `read-guide --page PAGE` only when workflow detail is needed.
+2. `search-docs QUERY` for user docs in `docs/`.
+3. `notebook-outline PATH` before reading notebook cells.
+4. `read-cell PATH INDEX` for targeted cell reads.
+5. MIP metadata commands for live catalog and algorithm facts.
+6. Ask the user only when intent or required data is not discoverable.
+
+## Discovery budget
+
+Before exploratory shell commands, use curated metadata tools:
+
+- `mip-env-status`, `mip-catalog-summary`, `mip-data-model-summary`, `mip-search-variables`
+
+Do **not** run `python -c` API probes, `help(mip)`, environment dumps, or `cat` on notebook JSON. For notebook context use `notebook-outline` and bounded `read-cell`.
+
+For multi-step analyses, keep tool payloads small — see `04-jupyter-mcp.md` (Tool payload safety).
 
 ## Notebook work
 
@@ -89,12 +99,17 @@ Use the smallest source that can answer the question:
 
 ## Available curated tools
 
-- Guide and docs: `agent_read_guide`, `agent_search_docs`.
+- Guide and docs: `read-guide`, `search-docs`.
 - Notebook context: `notebook_outline`, `notebook_read_cell`.
 - Notebook edits: `create_notebook`, `append_markdown_cell`, `append_code_cell`, `edit_cell_by_index`, `open_file`.
 - Notebook execution: `run_cell_by_index`, `run_all_cells`.
+- Scratch session: `scratch_init`, `scratch_copy_file`, `scratch_read`, `scratch_list`, `scratch_log_bottleneck`.
 - MIP metadata: `mip_env_status`, `mip_catalog_summary`, `mip_data_model_summary`, `mip_search_variables`, `mip_algorithm_summary`.
 
-If native MCP tools are unavailable, call the same surface through `python -m mip_jupyter_dev.jupyter_mcp_cli`; `JUPYTER_MCP_URL` should already be set in JupyterLab.
+Use `python -m mip_jupyter_dev.jupyter_mcp_cli` or the `jupyter-mcp` helper for
+all notebook, wiki, user-doc, and MIP metadata actions in the qwen shell-bridge
+runtime. Native `mcp__*` tools are disabled there; `JUPYTER_MCP_URL` is set by
+JupyterLab.
 
-**Next file:** `01-onboarding.md` for new-user tasks, or `04-jupyter-mcp.md` for MCP command details.
+**Next file:** the routed wiki page for the task, or `04-jupyter-mcp.md` for
+notebook command details.

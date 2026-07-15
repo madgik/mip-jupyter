@@ -68,13 +68,36 @@ Use `creator.variable` for the derived column in downstream algorithms.
 
 ## Pipeline algorithms
 
-`describe`, `histogram`, `t_test`, `pearson_correlation`, `chi_square_test`, `logistic_regression`
+**30** typed methods on `mip.Pipeline`. Full catalog, signatures, and result keys: **`07-pipeline-algorithms.md`**. Runnable smoke test: `workspace/examples/algorithm_examples.py`.
 
 ```python
-pipeline = mip.Pipeline(analysis_set=..., filters=..., handle_missing=...)
+pipeline.available_algorithms()
+client.algorithms().list()
+```
+
+## Pipeline algorithms (syntax)
+
+```python
+pipeline = mip.Pipeline(analysis_set=..., filters=..., handle_missing=..., new_columns=[creator])
 pipeline.histogram(variable=mmse, bins=20)
 pipeline.logistic_regression(x=[age, sex], y=diagnosis, positive_class="AD")
 ```
+
+## Result.summary() shapes
+
+| Algorithm | Keys |
+|-----------|------|
+| Describe | `featurewise[].data.mean`, `.std`, `.q2`, `.num_dtps` |
+| Histogram | `histogram[0].bins`, `histogram[0].counts` |
+| T-test | `t_stat`, `df`, `p`, `mean_diff`, `ci_lower`, `ci_upper`, `cohens_d` |
+| Chi-square | `chi2`, `p_value`, `dof` |
+| Logistic | `indep_vars`, `summary.coefficients`, `summary.pvalues`, `summary.lower_ci`, `summary.upper_ci` |
+
+## Pipeline pitfalls
+
+- No `Pipeline.run()`.
+- `new_columns` takes creators; algorithms take `creator.variable`.
+- Enumeration filter values are often codes (`"1"`, `"0"`), not display labels.
 
 ## Algorithm and experiment registries
 

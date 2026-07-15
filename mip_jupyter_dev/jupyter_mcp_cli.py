@@ -12,6 +12,8 @@ from urllib.error import URLError
 from urllib.request import Request
 from urllib.request import urlopen
 
+from mip_jupyter_dev import jupyter_mcp_tools as tools
+
 DEFAULT_MCP_URL = "http://127.0.0.1:3001/mcp"
 
 
@@ -88,10 +90,29 @@ def call_tool(url: str, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 def _content_from_args(args: argparse.Namespace) -> str:
     if getattr(args, "content_file", None):
         if args.content_file == "-":
+            if os.getenv("MIP_JUPYTER_DEV_UNSAFE_STDIN") != "1":
+                raise ValueError(
+                    "Reading content from stdin is disabled; pass content inline or use a file path."
+                )
             return sys.stdin.read()
-        with open(args.content_file, encoding="utf-8") as handle:
-            return handle.read()
-    return " ".join(getattr(args, "content", []) or [])
+        relative = tools._workspace_relative_path(args.content_file)
+        file_path = tools._workspace_root() / relative
+        if not file_path.is_file():
+            raise FileNotFoundError(f"Content file not found in workspace: {relative.as_posix()}")
+        with file_path.open(encoding="utf-8") as handle:
+            content = handle.read()
+        if len(content) > tools.MAX_CELL_WRITE_CHARS:
+            raise ValueError(
+                f"Content exceeds {tools.MAX_CELL_WRITE_CHARS} characters; "
+                "use scratch-append-lines or smaller append-code calls."
+            )
+        return content
+    content = " ".join(getattr(args, "content", []) or [])
+    if len(content) > tools.MAX_CELL_WRITE_CHARS:
+        raise ValueError(
+            f"Content exceeds {tools.MAX_CELL_WRITE_CHARS} characters; split into smaller calls."
+        )
+    return content
 
 
 def _text_arg(value: list[str] | str | None) -> str:
@@ -105,13 +126,19 @@ def _add_content_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--content-file")
 
 
+def _add_guide_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--page")
+    parser.add_argument("--topic")
+    parser.add_argument("--max-chars", type=int, default=4000)
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Call the local curated Jupyter MCP server.")
     parser.add_argument("--mcp-url", default=os.getenv("JUPYTER_MCP_URL", DEFAULT_MCP_URL))
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     read_guide = subparsers.add_parser("read-guide", help="Read the production agent guide")
-    read_guide.add_argument("--topic")
+    _add_guide_args(read_guide)
 
     search_docs = subparsers.add_parser("search-docs", help="Search workspace docs")
     search_docs.add_argument("query", nargs="+")
@@ -119,6 +146,7 @@ def _parser() -> argparse.ArgumentParser:
 
     outline = subparsers.add_parser("notebook-outline", help="Summarize notebook cells without full outputs")
     outline.add_argument("path")
+    outline.add_argument("--max-cells", type=int, default=100)
 
     read_cell = subparsers.add_parser("read-cell", help="Read one notebook cell")
     read_cell.add_argument("path")
@@ -175,16 +203,60 @@ def _parser() -> argparse.ArgumentParser:
     algorithms = subparsers.add_parser("mip-algorithm-summary", help="List compact algorithm summaries")
     algorithms.set_defaults(no_args=True)
 
-    legacy_md = subparsers.add_parser("add-markdown", help="Alias for append-markdown")
-    legacy_md.add_argument("path")
-    _add_content_args(legacy_md)
+    scratch_copy = subparsers.add_parser(
+        "scratch-copy-template",
+        help="Copy examples/<script>.py or scratch/<script>.py to scratch/<name>.py",
+    )
+    scratch_copy.add_argument("dest")
+    scratch_copy.add_argument("--source", default=tools.SCRATCH_TEMPLATE_DEFAULT)
 
-    legacy_code = subparsers.add_parser("add-code", help="Alias for append-code")
-    legacy_code.add_argument("path")
-    _add_content_args(legacy_code)
+    scratch_copy_file = subparsers.add_parser(
+        "scratch-copy-file",
+        help="Copy an allowlisted scratch Markdown template to scratch/<name>.md",
+    )
+    scratch_copy_file.add_argument("dest")
+    scratch_copy_file.add_argument("source")
 
-    legacy_read = subparsers.add_parser("read-notebook", help="Alias for notebook-outline")
-    legacy_read.add_argument("path")
+    scratch_init_cmd = subparsers.add_parser(
+        "scratch-init",
+        help="Create scratch/_session.md and scratch/_bottlenecks.md from templates",
+    )
+    scratch_init_cmd.set_defaults(no_args=True)
+
+    scratch_read_cmd = subparsers.add_parser("scratch-read", help="Read a bounded scratch artifact")
+    scratch_read_cmd.add_argument("path")
+    scratch_read_cmd.add_argument("--max-chars", type=int, default=4000)
+
+    scratch_append = subparsers.add_parser(
+        "scratch-append-lines", help="Append a small chunk of lines to scratch/<name>.py"
+    )
+    scratch_append.add_argument("path")
+    scratch_append.add_argument("lines", nargs="+")
+
+    scratch_replace = subparsers.add_parser(
+        "scratch-replace-snippet", help="Replace one small snippet in scratch/<name>.py"
+    )
+    scratch_replace.add_argument("path")
+    scratch_replace.add_argument("old")
+    scratch_replace.add_argument("new")
+
+    scratch_nb = subparsers.add_parser(
+        "scratch-to-notebook", help="Transfer a verified scratch script into a notebook"
+    )
+    scratch_nb.add_argument("script_path")
+    scratch_nb.add_argument("notebook_path")
+    scratch_nb.add_argument("--title")
+
+    scratch_list_cmd = subparsers.add_parser("scratch-list", help="List scratch artifacts for resume")
+    scratch_list_cmd.set_defaults(no_args=True)
+
+    scratch_log = subparsers.add_parser(
+        "scratch-log-bottleneck", help="Append one row to scratch/_bottlenecks.md"
+    )
+    scratch_log.add_argument("step")
+    scratch_log.add_argument("status")
+    scratch_log.add_argument("blocker")
+    scratch_log.add_argument("note", nargs="+")
 
     return parser
 
@@ -192,18 +264,24 @@ def _parser() -> argparse.ArgumentParser:
 def _tool_call_for_args(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
     command = args.command
     if command == "read-guide":
-        return "agent_read_guide", {"topic": args.topic}
+        return (
+            "agent_read_guide",
+            {"topic": args.topic, "page": args.page, "max_chars": args.max_chars},
+        )
     if command == "search-docs":
         return "agent_search_docs", {"query": _text_arg(args.query), "limit": args.limit}
-    if command in {"notebook-outline", "read-notebook"}:
-        return "notebook_outline", {"path": args.path}
+    if command == "notebook-outline":
+        return "notebook_outline", {
+            "path": args.path,
+            "max_cells": args.max_cells,
+        }
     if command == "read-cell":
         return "notebook_read_cell", {"path": args.path, "index": args.index, "max_chars": args.max_chars}
     if command == "create-notebook":
         return "create_notebook", {"path": args.path, "kernel_name": args.kernel_name}
-    if command in {"append-markdown", "add-markdown"}:
+    if command == "append-markdown":
         return "append_markdown_cell", {"path": args.path, "content": _content_from_args(args)}
-    if command in {"append-code", "add-code"}:
+    if command == "append-code":
         return "append_code_cell", {"path": args.path, "content": _content_from_args(args)}
     if command == "edit-cell":
         return (
@@ -232,6 +310,40 @@ def _tool_call_for_args(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
         )
     if command == "mip-algorithm-summary":
         return "mip_algorithm_summary", {}
+    if command == "scratch-copy-template":
+        return "scratch_copy_template", {"dest": args.dest, "source": args.source}
+    if command == "scratch-copy-file":
+        return "scratch_copy_file", {"dest": args.dest, "source": args.source}
+    if command == "scratch-init":
+        return "scratch_init", {}
+    if command == "scratch-read":
+        return "scratch_read", {"path": args.path, "max_chars": args.max_chars}
+    if command == "scratch-append-lines":
+        return "scratch_append_lines", {
+            "path": args.path,
+            "lines": _text_arg(args.lines),
+        }
+    if command == "scratch-replace-snippet":
+        return "scratch_replace_snippet", {
+            "path": args.path,
+            "old": args.old,
+            "new": args.new,
+        }
+    if command == "scratch-to-notebook":
+        return "scratch_to_notebook", {
+            "script_path": args.script_path,
+            "notebook_path": args.notebook_path,
+            "title": args.title,
+        }
+    if command == "scratch-list":
+        return "scratch_list", {}
+    if command == "scratch-log-bottleneck":
+        return "scratch_log_bottleneck", {
+            "step": args.step,
+            "status": args.status,
+            "blocker": args.blocker,
+            "note": _text_arg(args.note),
+        }
     raise AssertionError(command)
 
 

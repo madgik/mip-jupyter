@@ -60,10 +60,10 @@ Use `creator.variable` for the derived column in downstream algorithms.
 
 ## Pipeline algorithms
 
-`describe`, `histogram`, `t_test`, `pearson_correlation`, `chi_square_test`, `logistic_regression`
+**30** typed methods. See [Pipeline algorithms (agent wiki)](../llm/wiki/07-pipeline-algorithms.md) or run `workspace/examples/algorithm_examples.py`.
 
 ```python
-pipeline = mip.Pipeline(analysis_set=..., filters=..., handle_missing=...)
+pipeline.available_algorithms()
 pipeline.histogram(variable=mmse, bins=20)
 pipeline.logistic_regression(x=[age, sex], y=diagnosis, positive_class="Alzheimer's disease")
 ```

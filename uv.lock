@@ -854,6 +854,15 @@ wheels = [
 ]
 
 [[package]]
+name = "iniconfig"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc35312d08ba8bf51fdd999c576889fc2c24cb97f4f10/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730", size = 20503, upload-time = "2025-10-18T21:55:43.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
+]
+
+[[package]]
 name = "ipykernel"
 version = "7.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1130,7 +1139,7 @@ wheels = [
 
 [[package]]
 name = "jupyter-ai"
-version = "3.0.0"
+version = "3.0.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jupyter-ai-acp-client" },
@@ -1144,9 +1153,9 @@ dependencies = [
     { name = "jupyterlab-commands-toolkit" },
     { name = "jupyterlab-notebook-awareness" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2d/09/ebd494d3869a8632162d8e9f41e2fd29c082222ba9038f15faa121e99bd8/jupyter_ai-3.0.0.tar.gz", hash = "sha256:f7e56c5884328812500d1e4bb4c47146f0a920f913b8033fce15ac56d62ec87b", size = 26756331, upload-time = "2026-04-01T00:03:28.439Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/d5/89a304844ab3f3072adec19e9f542f0d76c4bddee922b3eda2373f13113d/jupyter_ai-3.0.1.tar.gz", hash = "sha256:7bb2bdc0068a2188e41d90813e53f81b7117a5c7f844a917ba7cb75ec8e886c7", size = 26772038, upload-time = "2026-06-30T23:41:14.27Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f4/ac/20bc15529bc48eebedbb054b672a5d77d3f852b7d969c4826be1bdb73be4/jupyter_ai-3.0.0-py3-none-any.whl", hash = "sha256:22286c1a9430d7ed7d75d91f5dbf64e70bd5930f3c50ff88c8e529d16cf1f990", size = 4844, upload-time = "2026-04-01T00:03:25.995Z" },
+    { url = "https://files.pythonhosted.org/packages/18/25/5581b0d79772e230772243a26cac553fad5657ff33e9a5c45202fde949f0/jupyter_ai-3.0.1-py3-none-any.whl", hash = "sha256:eddc7888f7427d9d74bfb876b20f9e033ff6b551b2b135616552ebcb5ec0c690", size = 4882, upload-time = "2026-06-30T23:41:10.948Z" },
 ]
 
 [[package]]
@@ -1182,7 +1191,7 @@ wheels = [
 
 [[package]]
 name = "jupyter-ai-persona-manager"
-version = "0.0.11"
+version = "0.0.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "importlib-metadata" },
@@ -1193,9 +1202,9 @@ dependencies = [
     { name = "pycrdt" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/1e/00/f4444bc468dc84516793fa62759db8c35ea49f1d2646b5616f78b4ba4641/jupyter_ai_persona_manager-0.0.11.tar.gz", hash = "sha256:d2386cf2132e5942b67476521816de34a7e35584f7b9a3cf52d0371f647e1aba", size = 159633, upload-time = "2026-04-22T19:08:57.69Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/78/e5e2260e4bde555c6c0a21afd924440fadb9337dc75a34899e6e507fe0b3/jupyter_ai_persona_manager-0.0.12.tar.gz", hash = "sha256:def563d49ddd3cdef0aa54f530d4a76d3bbcfd898822d6e415c16db704e38a89", size = 161085, upload-time = "2026-07-01T22:00:40.709Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/81/03/390105f0c4d0327f6d6392b1ac08abadc82bab9e33d93db9908b291eb1dd/jupyter_ai_persona_manager-0.0.11-py3-none-any.whl", hash = "sha256:b600c6e5cefe99b5b82649a0552a646af466142fe2b071ac078067d3db22f634", size = 48694, upload-time = "2026-04-22T19:08:55.857Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/ea/3628e9f42facb3a8913e2ff2787c7517c791472e67e24506bc1af93c3a0f/jupyter_ai_persona_manager-0.0.12-py3-none-any.whl", hash = "sha256:63dbae7721544553f50367dbbd1dae0733e128ae2cac8d53f3758762bbb85550", size = 49921, upload-time = "2026-07-01T22:00:39.085Z" },
 ]
 
 [[package]]
@@ -1833,6 +1842,7 @@ notebook = [
     { name = "ipython", version = "9.14.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "matplotlib", version = "3.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "seaborn" },
 ]
 
 [package.metadata]
@@ -1844,6 +1854,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0,<9.0.0" },
     { name = "requests", specifier = ">=2.25.0,<3.0.0" },
     { name = "scikit-learn", specifier = ">=1.0.0,<2.0.0" },
+    { name = "seaborn", marker = "extra == 'notebook'", specifier = ">=0.13.0,<1.0.0" },
 ]
 provides-extras = ["dev", "notebook"]
 
@@ -1860,6 +1871,13 @@ dependencies = [
     { name = "mip", extra = ["notebook"] },
     { name = "nbconvert" },
     { name = "notebook" },
+    { name = "seaborn" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
 ]
 
 [package.metadata]
@@ -1871,7 +1889,11 @@ requires-dist = [
     { name = "mip", extras = ["notebook"], editable = "python-client" },
     { name = "nbconvert", specifier = ">=7.0.0,<8.0.0" },
     { name = "notebook", specifier = ">=7.0.0,<8.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0,<9.0.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24.0,<1.0.0" },
+    { name = "seaborn", specifier = ">=0.13.0,<1.0.0" },
 ]
+provides-extras = ["dev"]
 
 [[package]]
 name = "mistune"
@@ -2293,6 +2315,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pluggy"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
 name = "prometheus-client"
 version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2616,6 +2647,36 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e8/52/d87eba7cb129b81563019d1679026e7a112ef76855d6159d24754dbd2a51/pyperclip-1.11.0.tar.gz", hash = "sha256:244035963e4428530d9e3a6101a1ef97209c6825edab1567beac148ccc1db1b6", size = 12185, upload-time = "2025-09-26T14:40:37.245Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/df/80/fc9d01d5ed37ba4c42ca2b55b4339ae6e200b456be3a1aaddf4a9fa99b8c/pyperclip-1.11.0-py3-none-any.whl", hash = "sha256:299403e9ff44581cb9ba2ffeed69c7aa96a008622ad0c46cb575ca75b5b84273", size = 11063, upload-time = "2025-09-26T14:40:36.069Z" },
+]
+
+[[package]]
+name = "pytest"
+version = "8.4.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
+    { name = "iniconfig" },
+    { name = "packaging" },
+    { name = "pluggy" },
+    { name = "pygments" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a3/5c/00a0e072241553e1a7496d638deababa67c5058571567b92a7eaa258397c/pytest-8.4.2.tar.gz", hash = "sha256:86c0d0b93306b961d58d62a4db4879f27fe25513d4b969df351abdddb3c30e01", size = 1519618, upload-time = "2025-09-04T14:34:22.711Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/a4/20da314d277121d6534b3a980b29035dcd51e6744bd79075a6ce8fa4eb8d/pytest-8.4.2-py3-none-any.whl", hash = "sha256:872f880de3fc3a5bdc88a11b39c9710c3497a547cfa9320bc3c5e62fbf272e79", size = 365750, upload-time = "2025-09-04T14:34:20.226Z" },
+]
+
+[[package]]
+name = "pytest-asyncio"
+version = "0.26.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8e/c4/453c52c659521066969523e87d85d54139bbd17b78f09532fb8eb8cdb58e/pytest_asyncio-0.26.0.tar.gz", hash = "sha256:c4df2a697648241ff39e7f0e4a73050b03f123f760673956cf0d72a4990e312f", size = 54156, upload-time = "2025-03-25T06:22:28.883Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/20/7f/338843f449ace853647ace35870874f69a764d251872ed1b4de9f234822c/pytest_asyncio-0.26.0-py3-none-any.whl", hash = "sha256:7b51ed894f4fbea1340262bdae5135797ebbe21d8638978e35d31c6d19f72fb0", size = 19694, upload-time = "2025-03-25T06:22:27.807Z" },
 ]
 
 [[package]]
@@ -3142,6 +3203,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/65/94/7698add8f276dbab7a9de9fb6b0e02fc13ee61d51c7c3f85ac28b65e1239/scipy-1.17.1-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:f590cd684941912d10becc07325a3eeb77886fe981415660d9265c4c418d0bea", size = 37625856, upload-time = "2026-02-23T00:19:00.307Z" },
     { url = "https://files.pythonhosted.org/packages/a2/84/dc08d77fbf3d87d3ee27f6a0c6dcce1de5829a64f2eae85a0ecc1f0daa73/scipy-1.17.1-cp312-cp312-win_amd64.whl", hash = "sha256:41b71f4a3a4cab9d366cd9065b288efc4d4f3c0b37a91a8e0947fb5bd7f31d87", size = 36549682, upload-time = "2026-02-23T00:19:07.67Z" },
     { url = "https://files.pythonhosted.org/packages/bc/98/fe9ae9ffb3b54b62559f52dedaebe204b408db8109a8c66fdd04869e6424/scipy-1.17.1-cp312-cp312-win_arm64.whl", hash = "sha256:f4115102802df98b2b0db3cce5cb9b92572633a1197c77b7553e5203f284a5b3", size = 24547340, upload-time = "2026-02-23T00:19:12.024Z" },
+]
+
+[[package]]
+name = "seaborn"
+version = "0.13.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib", version = "3.10.9", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "matplotlib", version = "3.11.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "pandas", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/86/59/a451d7420a77ab0b98f7affa3a1d78a313d2f7281a57afb1a34bae8ab412/seaborn-0.13.2.tar.gz", hash = "sha256:93e60a40988f4d65e9f4885df477e2fdaff6b73a9ded434c1ab356dd57eefff7", size = 1457696, upload-time = "2024-01-25T13:21:52.551Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/11/00d3c3dfc25ad54e731d91449895a79e4bf2384dc3ac01809010ba88f6d5/seaborn-0.13.2-py3-none-any.whl", hash = "sha256:636f8336facf092165e27924f223d3c62ca560b1f2bb5dff7ab7fad265361987", size = 294914, upload-time = "2024-01-25T13:21:49.598Z" },
 ]
 
 [[package]]

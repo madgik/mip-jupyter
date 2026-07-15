@@ -1,26 +1,41 @@
-"""Tests for Codex bootstrap and qwen model catalog generation."""
+"""Tests for Codex bootstrap and vLLM model catalog generation."""
 
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from traitlets.utils.importstring import import_item
 
 from mip_jupyter_dev import notebook as notebook_runner
 from mip_jupyter_dev.codex_bootstrap import (
     DEFAULT_CODEX_MODEL,
     DEFAULT_CODEX_MODELS,
     DEFAULT_CODEX_PERSONA_ID,
+    DEFAULT_CODEX_REASONING_EFFORT,
+    FEDERATED_RULES,
+    EXPLORATION_RULES,
+    MCP_CLI_RULES,
+    NATIVE_MCP_RULES,
+    NOVEL_STROKE_RULES,
+    PRIVACY_RULES,
+    ROUTING_RULES,
     SCOPE_RULES,
+    TOOL_PAYLOAD_RULES,
     CodexSettings,
     bootstrap_codex,
+    build_base_instructions,
     write_codex_config,
     write_codex_model_catalog,
 )
 from mip_jupyter_dev.mip_acp_persona import MIP_PERSONA_ID
 from mip_jupyter_dev.mip_acp_persona import MIP_PERSONA_NAME
+from mip_jupyter_dev.mip_acp_persona import TOOL_CALL_PARSE_ERROR_MESSAGE
 from mip_jupyter_dev.mip_acp_persona import VLLM_UNAVAILABLE_MESSAGE
+from mip_jupyter_dev.mip_acp_persona import CohortScoutPersona
+from mip_jupyter_dev.mip_acp_persona import is_tool_call_parse_error
 from mip_jupyter_dev.mip_acp_persona import is_vllm_unavailable_error
 from mip_jupyter_dev.mip_persona_manager import (
     ALLOWED_PERSONA_ENTRY_POINTS,
@@ -28,12 +43,14 @@ from mip_jupyter_dev.mip_persona_manager import (
     MipPersonaManager,
 )
 from mip_jupyter_dev.jupyter_mcp_config import build_config as build_mcp_config
+from mip_jupyter_dev import jupyter_mcp_cli
 
 
 @pytest.fixture(autouse=True)
 def _clear_codex_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in (
         "CODEX_VLLM_MODEL",
+        "CODEX_REASONING_EFFORT",
         "CODEX_MODEL_CONTEXT_WINDOW",
         "CODEX_AUTO_COMPACT_TOKEN_LIMIT",
         "CODEX_ENABLE_NATIVE_JUPYTER_MCP",
@@ -42,41 +59,89 @@ def _clear_codex_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
-def test_catalog_defaults_to_qwen_only() -> None:
-    assert DEFAULT_CODEX_MODELS == ("qwen36-nvfp4",)
+def test_catalog_defaults_to_nemotron_only() -> None:
+    assert DEFAULT_CODEX_MODELS == ("nemotron3-super-nvfp4",)
 
 
-def test_from_env_default_model_is_qwen() -> None:
+def test_from_env_default_model_is_nemotron() -> None:
     settings = CodexSettings.from_env()
     assert settings.model == DEFAULT_CODEX_MODEL
-    assert settings.model == "qwen36-nvfp4"
-    assert settings.context_window == 32768
-    assert settings.auto_compact_limit == 28000
+    assert settings.model == "nemotron3-super-nvfp4"
+    assert settings.context_window == 131072
+    assert settings.auto_compact_limit == 112000
+    assert settings.catalog_models == ("nemotron3-super-nvfp4",)
+    assert settings.reasoning_effort == DEFAULT_CODEX_REASONING_EFFORT
+    assert settings.reasoning_effort == "medium"
+    assert not settings.enable_native_jupyter_mcp
+
+
+def test_native_mcp_can_be_enabled_by_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CODEX_ENABLE_NATIVE_JUPYTER_MCP", "1")
+    settings = CodexSettings.from_env()
+    assert settings.enable_native_jupyter_mcp
 
 
 def test_from_env_invalid_model_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CODEX_VLLM_MODEL", "other-model")
-    with pytest.raises(ValueError, match="supports only qwen36-nvfp4"):
+    with pytest.raises(ValueError, match="must be one of"):
         CodexSettings.from_env()
 
 
-def test_model_catalog_contains_qwen_model_only(tmp_path: Path) -> None:
+def test_from_env_invalid_reasoning_effort_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CODEX_REASONING_EFFORT", "xhigh")
+    with pytest.raises(ValueError, match="CODEX_REASONING_EFFORT"):
+        CodexSettings.from_env()
+
+
+def test_model_catalog_contains_nemotron_model_only(tmp_path: Path) -> None:
     settings = CodexSettings.from_env()
     catalog_path = tmp_path / "model-catalog.json"
     write_codex_model_catalog(catalog_path, settings)
 
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     slugs = [entry["slug"] for entry in catalog["models"]]
-    assert slugs == ["qwen36-nvfp4"]
+    assert slugs == ["nemotron3-super-nvfp4"]
 
-    qwen = catalog["models"][0]
-    assert qwen["context_window"] == 32768
-    assert "recipes" in qwen["base_instructions"]
-    assert SCOPE_RULES in qwen["base_instructions"]
-    assert "first make the step sequence work in plain Python" in qwen["base_instructions"]
+    nemotron = catalog["models"][0]
+    assert nemotron["context_window"] == 131072
+    assert nemotron["default_reasoning_level"] == "medium"
+    assert {level["effort"] for level in nemotron["supported_reasoning_levels"]} == {
+        "minimal",
+        "low",
+        "medium",
+    }
+    assert "recipes/stroke-analysis" not in nemotron["base_instructions"]
+    assert SCOPE_RULES in nemotron["base_instructions"]
+    assert MCP_CLI_RULES in nemotron["base_instructions"]
+    assert TOOL_PAYLOAD_RULES in nemotron["base_instructions"]
+    assert PRIVACY_RULES in nemotron["base_instructions"]
+    assert ROUTING_RULES in nemotron["base_instructions"]
+    assert FEDERATED_RULES not in nemotron["base_instructions"]
+    assert EXPLORATION_RULES not in nemotron["base_instructions"]
+    assert NOVEL_STROKE_RULES not in nemotron["base_instructions"]
+    assert "available_algorithms" not in nemotron["base_instructions"]
+    assert "novel_stroke_starter" not in nemotron["base_instructions"]
+    assert "write_stdin" in nemotron["base_instructions"]
+    assert "Subcommands:" not in nemotron["base_instructions"]
+    assert "never call native mcp__* tools" in nemotron["base_instructions"]
+    assert "Never retry write commands" in nemotron["base_instructions"]
+    assert len(nemotron["base_instructions"]) < 2900
+    assert len(build_base_instructions()) < 2900
 
 
-def test_config_toml_uses_default_qwen_model(tmp_path: Path) -> None:
+def test_native_model_instructions_allow_native_mcp(tmp_path: Path) -> None:
+    settings = replace(CodexSettings.from_env(), enable_native_jupyter_mcp=True)
+    catalog_path = tmp_path / "model-catalog.json"
+    write_codex_model_catalog(catalog_path, settings)
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+
+    instructions = catalog["models"][0]["base_instructions"]
+    assert NATIVE_MCP_RULES in instructions
+    assert MCP_CLI_RULES not in instructions
+    assert "never call native mcp__* tools" not in instructions
+
+
+def test_config_toml_uses_default_nemotron_model(tmp_path: Path) -> None:
     settings = CodexSettings.from_env()
     catalog_path = tmp_path / "model-catalog.json"
     config_path = tmp_path / "config.toml"
@@ -84,9 +149,40 @@ def test_config_toml_uses_default_qwen_model(tmp_path: Path) -> None:
     write_codex_config(config_path, settings, catalog_path)
 
     config = config_path.read_text(encoding="utf-8")
-    assert 'model = "qwen36-nvfp4"' in config
-    assert "model_context_window = 32768" in config
-    assert "model_auto_compact_token_limit = 28000" in config
+    assert 'model = "nemotron3-super-nvfp4"' in config
+    assert "model_context_window = 131072" in config
+    assert "model_auto_compact_token_limit = 112000" in config
+    assert 'model_reasoning_effort = "medium"' in config
+    assert '[mcp_servers."Jupyter MCP Server"]' not in config
+
+
+def test_native_config_registers_jupyter_mcp_server(tmp_path: Path) -> None:
+    settings = replace(CodexSettings.from_env(), enable_native_jupyter_mcp=True)
+    config_path = tmp_path / "config.toml"
+    write_codex_config(config_path, settings, tmp_path / "model-catalog.json")
+
+    config = config_path.read_text(encoding="utf-8")
+    assert '[mcp_servers."Jupyter MCP Server"]' in config
+    assert 'url = "http://127.0.0.1:3001/mcp"' in config
+
+
+def test_read_guide_cli_routes_to_allowlisted_page() -> None:
+    args = jupyter_mcp_cli._parser().parse_args(
+        [
+            "read-guide",
+            "--page",
+            "05-env-and-backend",
+            "--topic",
+            "Client.from_env",
+        ]
+    )
+    name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
+    assert name == "agent_read_guide"
+    assert arguments == {
+        "topic": "Client.from_env",
+        "page": "05-env-and-backend",
+        "max_chars": 4000,
+    }
 
 
 def test_notebook_cli_context_overrides_are_used() -> None:
@@ -103,8 +199,8 @@ def test_notebook_cli_context_overrides_are_used() -> None:
 
     settings = notebook_runner._codex_settings_from_args(args)
 
-    assert settings.model == "qwen36-nvfp4"
-    assert settings.catalog_models == ("qwen36-nvfp4",)
+    assert settings.model == "nemotron3-super-nvfp4"
+    assert settings.catalog_models == ("nemotron3-super-nvfp4",)
     assert settings.context_window == 4096
     assert settings.auto_compact_limit == 3500
 
@@ -116,8 +212,53 @@ def test_vllm_unavailable_detection_matches_connection_failures() -> None:
     assert not is_vllm_unavailable_error(ValueError("invalid notebook path"))
 
 
+def test_tool_call_parse_errors_are_not_treated_as_vllm_outage() -> None:
+    error_text = (
+        '{"error":{"message":"Expecting \',\' delimiter: line 1 column 3716",'
+        '"type":"BadRequestError","code":400}}'
+    )
+    assert is_tool_call_parse_error(RuntimeError(error_text))
+    assert not is_vllm_unavailable_error(RuntimeError(error_text))
+    assert is_tool_call_parse_error(RuntimeError("failed to parse function arguments: invalid number"))
+
+
+class _ErrorWithData(Exception):
+    def __init__(self, message: str, data: str) -> None:
+        super().__init__(message)
+        self.data = data
+
+
+def test_tool_call_parse_error_detects_exception_data_field() -> None:
+    err = _ErrorWithData("request failed", '{"message":"Expecting \',\' delimiter"}')
+    assert is_tool_call_parse_error(err)
+    assert not is_vllm_unavailable_error(err)
+
+
+@pytest.mark.asyncio
+async def test_cohort_scout_handle_tool_call_parse_error_sends_user_message() -> None:
+    persona = CohortScoutPersona.__new__(CohortScoutPersona)
+    import logging
+
+    persona.log = logging.getLogger("test")
+    sent: list[str] = []
+    persona.send_message = sent.append  # type: ignore[method-assign]
+
+    await CohortScoutPersona.handle_tool_call_parse_error(
+        persona,
+        RuntimeError("Expecting ',' delimiter: line 1 column 3716"),
+    )
+    assert sent == [TOOL_CALL_PARSE_ERROR_MESSAGE]
+
+
+def test_tool_call_parse_error_message_mentions_small_steps() -> None:
+    assert "new chat" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
+    assert "scratch-copy-template" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
+    assert "scratch-list" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
+    assert "notebook-outline" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
+
+
 def test_vllm_unavailable_message_is_user_facing() -> None:
-    assert "Cohort Scout cannot reach the qwen vLLM model service" in VLLM_UNAVAILABLE_MESSAGE
+    assert "Cohort Scout cannot reach the vLLM model service" in VLLM_UNAVAILABLE_MESSAGE
     assert "MIP platform connection are unaffected" in VLLM_UNAVAILABLE_MESSAGE
     assert "CODEX_VLLM_BASE_URL" in VLLM_UNAVAILABLE_MESSAGE
 
@@ -125,6 +266,10 @@ def test_vllm_unavailable_message_is_user_facing() -> None:
 def test_default_persona_is_cohort_scout() -> None:
     assert DEFAULT_CODEX_PERSONA_ID == MIP_PERSONA_ID
     assert MIP_PERSONA_NAME == "Cohort Scout"
+
+
+def test_persona_manager_class_is_importable() -> None:
+    assert import_item(MIP_PERSONA_MANAGER_CLASS) is MipPersonaManager
 
 
 def test_bootstrap_codex_writes_catalog_and_config(tmp_path: Path) -> None:
@@ -136,11 +281,18 @@ def test_bootstrap_codex_writes_catalog_and_config(tmp_path: Path) -> None:
 
     catalog = json.loads((codex_home / "model-catalog.json").read_text(encoding="utf-8"))
     assert len(catalog["models"]) == 1
-    assert catalog["models"][0]["slug"] == "qwen36-nvfp4"
+    assert catalog["models"][0]["slug"] == "nemotron3-super-nvfp4"
     assert MIP_PERSONA_NAME in catalog["models"][0]["base_instructions"]
     assert (codex_home / "config.toml").is_file()
+    jupyter_mcp_wrapper = codex_home / "bin" / "jupyter-mcp"
+    assert jupyter_mcp_wrapper.is_file()
+    assert jupyter_mcp_wrapper.read_text(encoding="utf-8").startswith("#!/bin/sh")
+    shell_guard = codex_home / "bin" / "mip-shell-guard"
+    assert shell_guard.is_file()
+    assert shell_guard.read_text(encoding="utf-8").startswith("#!/bin/sh")
     jupyter_config_data = json.loads(jupyter_config.read_text(encoding="utf-8"))
     assert jupyter_config_data["PersonaManager"]["default_persona_id"] == MIP_PERSONA_ID
+    assert jupyter_config_data["PersonaManager"]["builtin_mcp_servers"] == []
     assert (
         jupyter_config_data["PersonaManagerExtension"]["persona_manager_class"]
         == MIP_PERSONA_MANAGER_CLASS

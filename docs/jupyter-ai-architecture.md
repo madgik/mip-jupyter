@@ -1,6 +1,6 @@
 # MIP Platform Architecture
 
-How Jupyter AI (Cohort Scout), the MIP platform stack, federated Exaflow workers, and qwen vLLM inference fit together.
+How Jupyter AI (Cohort Scout), the MIP platform stack, federated Exaflow workers, and vLLM inference fit together.
 
 
 ## Overview
@@ -24,7 +24,7 @@ flowchart LR
     HW["exaflow-workers<br/><i>Hospital remote VMs</i>"]
 
     subgraph LLM["LLM inference"]
-        VLLM["qwen vLLM<br/>/v1/responses<br/>qwen36-nvfp4"]
+        VLLM["vLLM<br/>/v1/responses<br/>nemotron3-super-nvfp4"]
     end
 
     MCP -->|"mip.Client.from_env()<br/>metadata & analysis"| Backend
@@ -48,7 +48,7 @@ flowchart LR
 | **exaflow-controller** | Quart HTTP API; validates analysis requests, selects execution strategy, orchestrates worker tasks. |
 | **exaflow-workers (CSCS)** | gRPC workers running inside **CSCS Alps** (Lugano), the Swiss National Supercomputing Centre. |
 | **exaflow-workers (hospitals)** | gRPC workers on **remote VMs at hospital sites**, holding local clinical data. |
-| **qwen vLLM** | OpenAI-compatible `/v1/responses` endpoint (`qwen36-nvfp4`) for Cohort Scout chat inference via `CODEX_VLLM_BASE_URL`. |
+| **vLLM** | OpenAI-compatible `/v1/responses` endpoint (`nemotron3-super-nvfp4`) for Cohort Scout chat inference via `CODEX_VLLM_BASE_URL`. |
 
 Flow: `Jupyter MCP Server → platform-backend → exaflow-controller → exaflow-workers` (at CSCS or hospital remote VMs).
 
@@ -56,17 +56,17 @@ Flow: `Jupyter MCP Server → platform-backend → exaflow-controller → exaflo
 
 | Path | When it runs | Notes |
 |------|--------------|-------|
-| Chat → Codex → vLLM | Every user message | Cohort Scout calls qwen vLLM `/v1/responses` for inference. |
+| Chat → Codex → vLLM | Every user message | Cohort Scout calls vLLM `/v1/responses` for inference. |
 | Codex → shell bridge → MCP | Tool use from Codex | vLLM rejects native Responses `mcp` tools; Codex uses `jupyter_mcp_cli` instead. |
 | MCP → platform-backend → Exaflow | MIP metadata and analysis | MCP tools call `/services`; backend forwards execution to the controller and workers. |
 | MCP → local workspace | Notebook edits and runs | Outline, edit, and run-cell tools stay inside the JupyterLab container. |
 
 ## Why the shell bridge
 
-qwen vLLM rejects native Responses `mcp` and `web_search_preview` tool payloads. The runner sets `JUPYTER_MCP_URL` and instructs Codex to call curated tools through the CLI bridge. Native MCP forwarding is opt-in via `CODEX_ENABLE_NATIVE_JUPYTER_MCP=1`.
+vLLM rejects native Responses `mcp` and `web_search_preview` tool payloads. The runner sets `JUPYTER_MCP_URL` and instructs Codex to call curated tools through the CLI bridge. Native MCP forwarding is opt-in via `CODEX_ENABLE_NATIVE_JUPYTER_MCP=1`.
 
-## qwen vLLM
+## vLLM
 
-LLM inference uses a configured qwen vLLM endpoint (`CODEX_VLLM_BASE_URL`, model `qwen36-nvfp4`). This is separate from federated analysis compute at CSCS and hospital workers.
+LLM inference uses a configured vLLM endpoint (`CODEX_VLLM_BASE_URL`, model `nemotron3-super-nvfp4`). This is separate from federated analysis compute at CSCS and hospital workers.
 
 See [jupyter-ai-codex.md](jupyter-ai-codex.md) for operator setup and verification.

@@ -35,6 +35,8 @@ pip-wheel-metadata/
 
 # Local scratch and generated notebook artifacts
 scratch/
+!workspace/templates/scratch/
+!workspace/templates/scratch/**
 untitled*.chat
 python-client/uv.lock
 workspace/scratch/*

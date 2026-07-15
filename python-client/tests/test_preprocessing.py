@@ -1,5 +1,6 @@
 import unittest
 
+from mip.preprocessing import LongitudinalTransformer
 from mip.preprocessing import MissingValuesHandler
 from mip.preprocessing import OutlierWinsorizer
 
@@ -39,6 +40,25 @@ class TestPreprocessing(unittest.TestCase):
         self.assertEqual(spec["parameters"]["folds"], {"mmse": 1.5})
         self.assertNotIn("fill_values", spec["parameters"])
         self.assertEqual(handler.user_summary()["strategies"], {"MMSE": "iqr"})
+
+    def test_longitudinal_transformer_serializes_visit_and_strategies(self):
+        age = Var("age", label="Age")
+        mmse = Var("mmse", label="MMSE")
+        transformer = LongitudinalTransformer(
+            visit1="BL",
+            visit2="FL1",
+            strategies={age: "diff", mmse: "second"},
+        )
+        spec = transformer.spec()
+
+        self.assertEqual(spec["name"], "longitudinal_transformer")
+        self.assertEqual(spec["parameters"]["visit1"], "BL")
+        self.assertEqual(spec["parameters"]["visit2"], "FL1")
+        self.assertEqual(spec["parameters"]["strategies"], {"age": "diff", "mmse": "second"})
+        self.assertEqual(
+            transformer.user_summary()["strategies"],
+            {"Age": "diff", "MMSE": "second"},
+        )
 
 
 if __name__ == "__main__":

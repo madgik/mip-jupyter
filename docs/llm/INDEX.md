@@ -6,28 +6,17 @@
 
 ## Scope
 
-You are **Cohort Scout** in **mip-jupyter only**: JupyterLab + the `mip` Python client. You are a specialist, not a general chatbot.
-
-- Notebooks call **platform-backend** under `/services` — never Exaflow directly.
-- Do not read sibling repos (`platform-ui`, `platform-backend`, `exaflow`, umbrella workspace docs).
-
-### In scope
-
-- MIP catalog, data models, variables, algorithms, cohorts, pipelines, and results
-- Notebooks in this workspace: create, edit, run, debug
-- Python and statistics when supporting MIP analyses
-- Workspace docs and connection troubleshooting
-
-### Out of scope — refuse politely
-
-Do **not** answer and do **not** call tools for unrelated requests (recipes, trivia, entertainment, unrelated projects, personal advice, general web knowledge). Reply briefly that you help with MIP notebook work only, then redirect. Full policy: [wiki/00-agent-workspace.md](wiki/00-agent-workspace.md).
+Role, platform boundaries, and refusal wording live in
+[wiki/00-agent-workspace.md](wiki/00-agent-workspace.md). This index only routes
+startup context and defines what is safe to defer.
 
 ## Startup protocol
 
-1. Read [AGENTS.md](../../AGENTS.md) if you have not already.
+1. The repository supplies `AGENTS.md` as the bootstrap; do not reread it here.
 2. Pick **one** wiki page from the routing table below.
 3. Open source files or notebooks **only** when that page points you there.
-4. For continued work after compaction or handoff, read only the minimal `.llm/` runtime state after the relevant wiki page.
+4. For continued work after compaction or handoff, read `06-runtime-state.md`
+   and only the minimal `.llm/` runtime state for the active chat.
 5. Do **not** `find`, `grep`, or list the full repo tree on startup.
 
 ## Ignore list
@@ -42,6 +31,7 @@ Do not read unless a wiki page explicitly requires it:
 
 - **Agent wiki** (`docs/llm/`) — your startup corpus. Read one page at a time from the routing table below.
 - **User docs** (`docs/user/`) — for humans in Jupyter at `docs/` in the workspace. Do not read on startup unless you are helping a user find or quote user-facing help (use `agent_search_docs` in production Codex).
+- **Production Codex wiki access** — use `read-guide --page PAGE` through the Jupyter MCP shell bridge; never scan the bundled wiki directly.
 
 ## Routing table
 
@@ -50,11 +40,14 @@ Do not read unless a wiki page explicitly requires it:
 | Agent workspace rules, MCP workflow | [wiki/00-agent-workspace.md](wiki/00-agent-workspace.md) | — |
 | New MIP user, first steps | [wiki/01-onboarding.md](wiki/01-onboarding.md) | `workspace/Welcome.ipynb` |
 | Build or run an analysis pipeline | [wiki/02-analysis-workflow.md](wiki/02-analysis-workflow.md) | `workspace/examples/feres_analysis.ipynb` |
+| Which algorithms exist and how to run them | [wiki/07-pipeline-algorithms.md](wiki/07-pipeline-algorithms.md) | `workspace/examples/algorithm_examples.py` |
 | MIP Python API lookup | [wiki/03-mip-client-api.md](wiki/03-mip-client-api.md) | — |
 | Create or edit notebooks via AI | [wiki/04-jupyter-mcp.md](wiki/04-jupyter-mcp.md) | — |
 | Env vars, backend config, `Client.from_env()` | [wiki/05-env-and-backend.md](wiki/05-env-and-backend.md) | — |
 | Runtime state, compaction resume, pivots, handoffs | [wiki/06-runtime-state.md](wiki/06-runtime-state.md) | — |
+| Agent exploration, catalog audit, bottleneck tracking | [wiki/agent-exploration.md](wiki/agent-exploration.md) | `workspace/scratch/README.md` |
 | Federated stroke pathology notebook | [wiki/recipes/stroke-analysis.md](wiki/recipes/stroke-analysis.md) | `workspace/examples/feres_analysis.ipynb` |
+| Novel or statistical stroke analysis | [wiki/recipes/stroke-analysis.md](wiki/recipes/stroke-analysis.md) only — do not chain `02`/`03`/`04` | `scratch-copy-template` from `examples/algorithm_examples.py`, then `scratch-to-notebook` |
 | Client development, tests, commits | [wiki/dev-contributor.md](wiki/dev-contributor.md) | — |
 
 ## Full API contract

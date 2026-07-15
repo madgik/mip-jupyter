@@ -16,61 +16,108 @@ from .mip_acp_persona import MIP_PERSONA_ID
 from .mip_acp_persona import MIP_PERSONA_NAME
 from .mip_persona_manager import build_persona_manager_config
 
-DEFAULT_CODEX_BASE_URL = "http://100.92.46.71:8001/v1"
-DEFAULT_CODEX_MODEL = "qwen36-nvfp4"
-DEFAULT_CODEX_MODELS = (DEFAULT_CODEX_MODEL,)
-DEFAULT_CODEX_PROVIDER = "qwen_vllm"
-DEFAULT_CODEX_CONTEXT_WINDOW = 32768
-DEFAULT_CODEX_AUTO_COMPACT_LIMIT = 28000
-DEFAULT_CODEX_PERSONA_ID = MIP_PERSONA_ID
-DEFAULT_MCP_PORT = 3001
-
 MIP_CONTEXT = (
     "MIP (Medical Informatics Platform) is a federated clinical research platform. "
-    "Hospital sites keep patient data locally; the platform coordinates analyses "
-    "across sites without centralizing raw records. Users work in Jupyter with the "
-    "pre-installed mip Python client to discover data models, variables, and "
-    "algorithms, then build cohorts and run federated analyses via AnalysisSet "
-    "and Pipeline."
+    "Hospital sites keep patient data locally; use the pre-installed mip client in "
+    "Jupyter to discover authorized metadata, define cohorts, and run federated analyses."
 )
 
 USER_FACING_RULES = (
-    "Use plain language with end users: say 'the MIP platform', 'your connection', "
-    "'catalog', or 'analysis run'. Do not mention /services, internal URLs, "
-    "Exaflow, worker infrastructure, env var names, or deployment details unless "
-    "the user explicitly asks about developer or operator setup. "
+    "Use plain product language: say 'the MIP platform', 'your connection', 'catalog', "
+    "or 'analysis run'. Do not expose internal routes, URLs, infrastructure, or "
+    "environment variable names unless developer or operator setup is requested. "
     "For connection issues, point to Welcome.ipynb, docs/troubleshooting.md, or "
-    "their platform administrator."
+    "the platform administrator."
 )
 
 SCOPE_RULES = (
-    "Stay in scope: MIP JupyterLab, federated clinical and medical research notebooks, "
-    "the mip Python client, cohort and pipeline analysis, workspace docs, and Python "
-    "coding that supports those notebooks. "
-    "If the user asks about anything else (recipes, trivia, entertainment, unrelated "
-    "projects, personal life advice, or general web knowledge), do not answer that "
-    "question and do not call tools for it. Reply in one or two sentences that you "
-    "are Cohort Scout for MIP notebook work only, then say what you can help with: "
-    "catalog discovery, filters, pipelines, notebook edits, and workspace troubleshooting. "
-    "Do not give personal medical advice or invent catalog data."
+    "Stay in scope: MIP JupyterLab, notebooks, the mip client, catalog, cohorts, "
+    "pipelines, results, workspace docs, and supporting Python or statistics. For "
+    "unrelated requests such as recipes, general knowledge, personal medical advice, "
+    "or unrelated projects, do not call tools; refuse briefly as Cohort Scout and "
+    "redirect to MIP notebook help. Do not invent catalog data."
 )
 
-BASE_INSTRUCTIONS = (
-    f"You are {MIP_PERSONA_NAME} in JupyterLab for MIP analysis users. {MIP_CONTEXT} "
-    f"{SCOPE_RULES} "
-    f"{USER_FACING_RULES} "
-    "Start with agent_read_guide, then agent_search_docs for user help in docs/. "
-    "Agent wiki lives outside the user workspace at MIP_AGENT_DOCS (not for end users). "
-    "Use notebook_outline before notebook_read_cell, keep notebook work under scratch/ "
-    "unless the user names another path. For substantial examples or multi-step "
-    "analysis notebooks, first make the step sequence work in plain Python under "
-    "scratch/ or another temporary Python file, then transfer the verified flow "
-    "into notebook cells. Use mip.Client.from_env() through the "
-    "curated MIP metadata tools. Never dump tokens or use broad filesystem reads. "
-    "If native MCP is unavailable, call the same tools through "
-    "python -m mip_jupyter_dev.jupyter_mcp_cli; JUPYTER_MCP_URL is set."
+MCP_CLI_RULES = (
+    "NOTEBOOK AND MIP TOOLS (shell bridge): Use jupyter-mcp or python -m "
+    "mip_jupyter_dev.jupyter_mcp_cli for notebook, wiki, user-doc, and MIP metadata "
+    "actions. In shell-bridge mode, never call native mcp__* tools and never create "
+    "or edit .ipynb files by writing JSON or direct filesystem edits. Read only the "
+    "guide, routed wiki page, or user docs needed for the task. Retry once only for "
+    "transient read failures (read-guide, search-docs, notebook-outline, read-cell, "
+    "scratch-list, scratch-read, mip-* summaries). Never retry write commands "
+    "(append-code, scratch-append-lines, scratch-to-notebook) without scratch-list or "
+    "notebook-outline first."
 )
 
+PRIVACY_RULES = (
+    "Never expose row-level patient data, identifiers, tokens, or raw execution "
+    "outputs. Report only authorized aggregate metadata and analysis results."
+)
+
+ROUTING_RULES = (
+    "Read read-guide --page index to pick the task wiki page; load analysis-specific "
+    "rules from that routed page only."
+)
+
+NATIVE_MCP_RULES = (
+    "NOTEBOOK AND MIP TOOLS (native MCP): Use the configured Jupyter MCP tools for "
+    "notebook, wiki, user-doc, and MIP metadata actions. Never create or edit .ipynb "
+    "files by writing JSON or direct filesystem edits."
+)
+
+TOOL_PAYLOAD_RULES = (
+    "Keep tool args small JSON. No write_stdin/heredocs/shell file writes. "
+    "Use scratch-copy-template, scratch-append-lines, scratch-replace-snippet, "
+    "scratch-to-notebook, append-code."
+)
+
+PLAIN_PYTHON_RULES = (
+    "Novel/multi-step: scratch-copy-template from examples/algorithm_examples.py, "
+    "small scratch edits, verify with python scratch/<name>.py, then scratch-to-notebook."
+)
+
+FEDERATED_RULES = (
+    "Federated only: dm.datasets['SSR']; never mix SSR with SSR-even/odd. Run "
+    "stroke_preflight before inference. Use pipeline.available_algorithms() and "
+    "typed Pipeline methods; signatures in examples/algorithm_examples.py. "
+    "No inputdata/to_frame/sklearn on rows."
+)
+
+EXPLORATION_RULES = (
+    "Exploration: read-guide agent-exploration; scratch-init on turn 1; "
+    "scratch-list before new scripts; scratch-log-bottleneck after each step; "
+    "max 20 lines per scratch edit."
+)
+
+NOVEL_STROKE_RULES = (
+    "Novel Stroke: read-guide recipes/stroke-analysis novel, preflight, one hypothesis, "
+    "scratch-copy-template from examples/algorithm_examples.py, trim to one analysis, "
+    "run script, scratch-to-notebook. OR (95% CI) primary; secondary exploratory."
+)
+
+
+def build_base_instructions(*, enable_native_jupyter_mcp: bool = False) -> str:
+    tool_rules = NATIVE_MCP_RULES if enable_native_jupyter_mcp else MCP_CLI_RULES
+    return (
+        f"You are {MIP_PERSONA_NAME} in JupyterLab for MIP analysis users. {MIP_CONTEXT} "
+        f"{SCOPE_RULES} {USER_FACING_RULES} {PRIVACY_RULES} {tool_rules} {TOOL_PAYLOAD_RULES} "
+        f"{ROUTING_RULES} Keep new work under scratch/, use curated MIP metadata tools, "
+        "and avoid broad filesystem reads."
+    )
+
+
+BASE_INSTRUCTIONS = build_base_instructions()
+
+DEFAULT_CODEX_BASE_URL = "http://100.92.46.71:8001/v1"
+DEFAULT_CODEX_MODEL = "nemotron3-super-nvfp4"
+DEFAULT_CODEX_PROVIDER = "vllm"
+DEFAULT_CODEX_CONTEXT_WINDOW = 131072
+DEFAULT_CODEX_AUTO_COMPACT_LIMIT = 112000
+DEFAULT_CODEX_REASONING_EFFORT = "medium"
+SUPPORTED_CODEX_REASONING_EFFORTS = frozenset({"minimal", "low", "medium"})
+DEFAULT_CODEX_PERSONA_ID = MIP_PERSONA_ID
+DEFAULT_MCP_PORT = 3001
 
 @dataclass(frozen=True)
 class VllmModelProfile:
@@ -83,20 +130,23 @@ class VllmModelProfile:
 
 
 VLLM_MODEL_REGISTRY: dict[str, VllmModelProfile] = {
-    "qwen36-nvfp4": VllmModelProfile(
-        slug="qwen36-nvfp4",
-        display_name="qwen36-nvfp4",
-        description="Qwen 3.6 35B NVFP4 model served by vLLM for mip-jupyter.",
-        context_window=32768,
-        auto_compact_limit=28000,
+    "nemotron3-super-nvfp4": VllmModelProfile(
+        slug="nemotron3-super-nvfp4",
+        display_name="nemotron3-super-nvfp4",
+        description="NVIDIA Nemotron 3 Super NVFP4 model served by vLLM for mip-jupyter.",
+        context_window=131072,
+        auto_compact_limit=112000,
         priority=0,
     ),
 }
 
+DEFAULT_CODEX_MODELS = (DEFAULT_CODEX_MODEL,)
 
-def _validate_qwen_model(model: str, *, source: str) -> None:
-    if model != DEFAULT_CODEX_MODEL:
-        raise ValueError(f"{source} supports only {DEFAULT_CODEX_MODEL}.")
+
+def _validate_vllm_model(model: str, *, source: str) -> None:
+    if model not in VLLM_MODEL_REGISTRY:
+        supported = ", ".join(DEFAULT_CODEX_MODELS)
+        raise ValueError(f"{source} must be one of: {supported}.")
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -120,6 +170,14 @@ def _active_auto_compact_limit(model: str) -> int:
     return profile.auto_compact_limit
 
 
+def _active_reasoning_effort() -> str:
+    effort = os.getenv("CODEX_REASONING_EFFORT", DEFAULT_CODEX_REASONING_EFFORT).strip().lower()
+    if effort not in SUPPORTED_CODEX_REASONING_EFFORTS:
+        supported = ", ".join(sorted(SUPPORTED_CODEX_REASONING_EFFORTS))
+        raise ValueError(f"CODEX_REASONING_EFFORT must be one of: {supported}.")
+    return effort
+
+
 @dataclass(frozen=True)
 class CodexSettings:
     base_url: str
@@ -128,6 +186,7 @@ class CodexSettings:
     provider: str
     context_window: int
     auto_compact_limit: int
+    reasoning_effort: str
     mcp_port: int
     enable_native_jupyter_mcp: bool
 
@@ -138,7 +197,7 @@ class CodexSettings:
         mcp_port: int | None = None,
     ) -> CodexSettings:
         model = os.getenv("CODEX_VLLM_MODEL", DEFAULT_CODEX_MODEL)
-        _validate_qwen_model(model, source="CODEX_VLLM_MODEL")
+        _validate_vllm_model(model, source="CODEX_VLLM_MODEL")
         return cls(
             base_url=os.getenv("CODEX_VLLM_BASE_URL", DEFAULT_CODEX_BASE_URL),
             model=model,
@@ -146,9 +205,10 @@ class CodexSettings:
             provider=os.getenv("CODEX_VLLM_PROVIDER", DEFAULT_CODEX_PROVIDER),
             context_window=_active_context_window(model),
             auto_compact_limit=_active_auto_compact_limit(model),
+            reasoning_effort=_active_reasoning_effort(),
             mcp_port=mcp_port if mcp_port is not None else int(os.getenv("JUPYTER_MCP_PORT", str(DEFAULT_MCP_PORT))),
             enable_native_jupyter_mcp=_env_flag("CODEX_ENABLE_NATIVE_JUPYTER_MCP")
-            and not _env_flag("CODEX_DISABLE_NATIVE_JUPYTER_MCP", default=True),
+            and not _env_flag("CODEX_DISABLE_NATIVE_JUPYTER_MCP"),
         )
 
 
@@ -156,12 +216,18 @@ def _write_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def _catalog_entry(profile: VllmModelProfile, *, context_window: int) -> dict:
+def _catalog_entry(
+    profile: VllmModelProfile,
+    *,
+    context_window: int,
+    base_instructions: str,
+    reasoning_effort: str,
+) -> dict:
     return {
         "slug": profile.slug,
         "display_name": profile.display_name,
         "description": profile.description,
-        "default_reasoning_level": "minimal",
+        "default_reasoning_level": reasoning_effort,
         "supported_reasoning_levels": [
             {
                 "effort": "minimal",
@@ -170,6 +236,10 @@ def _catalog_entry(profile: VllmModelProfile, *, context_window: int) -> dict:
             {
                 "effort": "low",
                 "description": "Light reasoning for coding and notebook assistance.",
+            },
+            {
+                "effort": "medium",
+                "description": "Deeper reasoning for multi-step exploration and audits.",
             },
         ],
         "shell_type": "shell_command",
@@ -180,7 +250,7 @@ def _catalog_entry(profile: VllmModelProfile, *, context_window: int) -> dict:
         "service_tiers": [],
         "availability_nux": None,
         "upgrade": None,
-        "base_instructions": BASE_INSTRUCTIONS,
+        "base_instructions": base_instructions,
         "supports_reasoning_summaries": False,
         "default_reasoning_summary": "none",
         "support_verbosity": False,
@@ -202,10 +272,20 @@ def _catalog_entry(profile: VllmModelProfile, *, context_window: int) -> dict:
 
 def write_codex_model_catalog(path: Path, settings: CodexSettings) -> None:
     entries = []
+    base_instructions = build_base_instructions(
+        enable_native_jupyter_mcp=settings.enable_native_jupyter_mcp
+    )
     for slug in settings.catalog_models:
         profile = VLLM_MODEL_REGISTRY[slug]
         context_window = settings.context_window if slug == settings.model else profile.context_window
-        entries.append(_catalog_entry(profile, context_window=context_window))
+        entries.append(
+            _catalog_entry(
+                profile,
+                context_window=context_window,
+                base_instructions=base_instructions,
+                reasoning_effort=settings.reasoning_effort,
+            )
+        )
     entries.sort(key=lambda entry: entry["priority"])
     _write_json(path, {"models": entries})
 
@@ -224,15 +304,51 @@ def write_codex_acp_wrapper(path: Path, executable: str) -> None:
     path.chmod(0o755)
 
 
+def write_jupyter_mcp_cli_wrapper(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    script = "#!/bin/sh\nexec python -m mip_jupyter_dev.jupyter_mcp_cli \"$@\"\n"
+    path.write_text(script, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def write_shell_guard_wrapper(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    script = (
+        "#!/bin/sh\n"
+        "validate_command_args() {\n"
+        "  while [ $# -gt 0 ]; do\n"
+        "    case \"$1\" in\n"
+        "      -c|-[!-]*c*)\n"
+        "        [ -n \"$2\" ] || return 0\n"
+        "        python -m mip_jupyter_dev.shell_guard --validate \"$2\"\n"
+        "        return $?\n"
+        "        ;;\n"
+        "    esac\n"
+        "    shift\n"
+        "  done\n"
+        "}\n"
+        "validate_command_args \"$@\" || exit 1\n"
+        "exec /bin/bash \"$@\"\n"
+    )
+    path.write_text(script, encoding="utf-8")
+    path.chmod(0o755)
+
+
 def write_codex_config(path: Path, settings: CodexSettings, model_catalog_path: Path) -> None:
     provider = settings.provider
+    mcp_server_config = ""
+    if settings.enable_native_jupyter_mcp:
+        mcp_server_config = (
+            "\n[mcp_servers.\"Jupyter MCP Server\"]\n"
+            f'url = "http://127.0.0.1:{settings.mcp_port}/mcp"\n'
+        )
     config = (
         f'model = "{settings.model}"\n'
         f'model_provider = "{provider}"\n'
         f'model_catalog_json = "{model_catalog_path}"\n'
         f"model_context_window = {settings.context_window}\n"
         f"model_auto_compact_token_limit = {settings.auto_compact_limit}\n"
-        'model_reasoning_effort = "minimal"\n'
+        f'model_reasoning_effort = "{settings.reasoning_effort}"\n'
         'model_reasoning_summary = "none"\n'
         "model_supports_reasoning_summaries = false\n"
         'approval_policy = "never"\n'
@@ -246,15 +362,19 @@ def write_codex_config(path: Path, settings: CodexSettings, model_catalog_path: 
         "[features]\n"
         "multi_agent = false\n\n"
         f"[model_providers.{provider}]\n"
-        'name = "qwen vLLM"\n'
+        'name = "vLLM"\n'
         f'base_url = "{settings.base_url}"\n'
         'wire_api = "responses"\n'
+        f"{mcp_server_config}"
     )
     path.write_text(config, encoding="utf-8")
 
 
 def build_jupyter_ai_config(settings: CodexSettings) -> dict:
-    builtin_mcp_servers: list | None = None if settings.enable_native_jupyter_mcp else []
+    if settings.enable_native_jupyter_mcp:
+        builtin_mcp_servers: list | None = None
+    else:
+        builtin_mcp_servers = []
     config = build_mcp_config(mcp_port=settings.mcp_port)
     config.update(
         build_persona_manager_config(
@@ -280,9 +400,12 @@ def bootstrap_codex(
     jupyter_ai_config.parent.mkdir(parents=True, exist_ok=True)
     _write_json(jupyter_ai_config, build_jupyter_ai_config(settings))
 
+    write_jupyter_mcp_cli_wrapper(codex_home / "bin" / "jupyter-mcp")
+    write_shell_guard_wrapper(codex_home / "bin" / "mip-shell-guard")
+
     codex_acp_path = shutil.which("codex-acp")
     if not codex_acp_path:
-        return None
+        return codex_home / "bin"
     wrapper = codex_home / "bin" / "codex-acp"
     write_codex_acp_wrapper(wrapper, codex_acp_path)
     return wrapper.parent
@@ -310,6 +433,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Jupyter AI config: {args.jupyter_ai_config}", flush=True)
     print(f"Codex base_url: {settings.base_url}", flush=True)
     print(f"Codex model: {settings.model}", flush=True)
+    print(f"Codex reasoning effort: {settings.reasoning_effort}", flush=True)
     print(f"Codex catalog models: {', '.join(settings.catalog_models)}", flush=True)
     return 0
 

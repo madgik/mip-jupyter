@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import mip
 from mip.analysis import AnalysisSet
 from mip.catalog import Catalog
+from mip.catalog_registry import PIPELINE_BACKEND_ALGORITHMS
 from mip.client import Client
 from mip.display import HelpText
 from mip.pipeline import Pipeline
@@ -68,8 +69,10 @@ class TestDiscoverability(unittest.TestCase):
         )
         pipeline = Pipeline(analysis_set=analysis_set)
         methods = pipeline.available_algorithms()
+        self.assertEqual(len(methods), len(PIPELINE_BACKEND_ALGORITHMS))
         self.assertIn("histogram", methods)
         self.assertIn("logistic_regression", methods)
+        self.assertIn("pca", methods)
 
     def test_pipeline_recommend_algorithms(self):
         analysis_set = AnalysisSet(

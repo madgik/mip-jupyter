@@ -5,19 +5,18 @@ from __future__ import annotations
 from typing import Any
 from typing import Sequence
 
-from .exceptions import MipBackendError
 from .display import HelpText
+from .exceptions import MipBackendError
 from .labels import build_explain_lookup
 from .labels import build_field_enumeration_lookups
-from .labels import public_label
 from .labels import sanitize_explain_dict
+from .catalog_registry import PIPELINE_METHOD_NAMES
+from .pipeline_algorithms import PipelineAlgorithmsMixin
 from .request_builder import build_experiment_payload
-from .request_builder import code as _code
-from .results import ModelResult
 from .results import Result
 
 
-class Pipeline:
+class Pipeline(PipelineAlgorithmsMixin):
     """Analysis execution pipeline with fixed filters/preprocessing order."""
 
     def __init__(
@@ -25,102 +24,17 @@ class Pipeline:
         *,
         analysis_set,
         filters=None,
+        longitudinal=None,
         handle_missing=None,
         outlier_handling=None,
         new_columns: Sequence[Any] | None = None,
     ):
         self.analysis_set = analysis_set
         self.filters = filters
+        self.longitudinal = longitudinal
         self.handle_missing = handle_missing
         self.outlier_handling = outlier_handling
         self.new_columns = list(new_columns or [])
-
-    def describe(self, mode: str = "transient") -> Result:
-        return self._execute_algorithm(
-            "describe",
-            algorithm_y=self.analysis_set.variables,
-            parameters={},
-            mode=mode,
-            name_for_ui="Describe",
-        )
-
-    def histogram(self, variable: Any, bins: int | None = None, mode: str = "transient") -> Result:
-        parameters = {}
-        if bins is not None:
-            parameters["bins"] = bins
-        return self._execute_algorithm(
-            "histogram",
-            algorithm_y=[variable],
-            parameters=parameters,
-            mode=mode,
-            name_for_ui=f"Histogram: {public_label(variable)}",
-            result_type="histogram",
-        )
-
-    def t_test(
-        self,
-        *,
-        variable: Any,
-        group_by: Any,
-        group_a: Any,
-        group_b: Any,
-        alt_hypothesis: str = "two-sided",
-        alpha: float = 0.05,
-        mode: str = "transient",
-    ) -> Result:
-        return self._execute_algorithm(
-            "ttest_independent",
-            algorithm_x=[group_by],
-            algorithm_y=[variable],
-            parameters={
-                "alt_hypothesis": alt_hypothesis,
-                "alpha": alpha,
-                "groupA": group_a,
-                "groupB": group_b,
-            },
-            mode=mode,
-            name_for_ui=f"T-test: {public_label(variable)}",
-        )
-
-    def pearson_correlation(self, *, x: Any, y: Any, mode: str = "transient") -> Result:
-        return self._execute_algorithm(
-            "pearson_correlation",
-            algorithm_x=[x],
-            algorithm_y=[y],
-            parameters={},
-            mode=mode,
-            name_for_ui=f"Pearson correlation: {public_label(x)} vs {public_label(y)}",
-        )
-
-    def chi_square_test(self, *, x: Any, y: Any, mode: str = "transient") -> Result:
-        return self._execute_algorithm(
-            "chi_squared",
-            algorithm_x=[x],
-            algorithm_y=[y],
-            parameters={},
-            mode=mode,
-            name_for_ui=f"Chi-square test: {public_label(x)} vs {public_label(y)}",
-        )
-
-    def logistic_regression(
-        self,
-        *,
-        x: Sequence[Any],
-        y: Any,
-        positive_class: Any,
-        mode: str = "transient",
-    ) -> ModelResult:
-        return self._execute_algorithm(
-            "logistic_regression",
-            algorithm_x=list(x),
-            algorithm_y=[y],
-            parameters={"positive_class": positive_class},
-            mode=mode,
-            name_for_ui=f"Logistic regression: {public_label(y)}",
-            result_class=ModelResult,
-            result_type="logistic_regression",
-            result_kwargs={"positive_class": positive_class},
-        )
 
     def summary(self) -> dict[str, Any]:
         lookup = self._lookup()
@@ -140,14 +54,7 @@ class Pipeline:
         return self.summary()
 
     def available_algorithms(self) -> list[str]:
-        return [
-            "describe",
-            "histogram",
-            "t_test",
-            "pearson_correlation",
-            "chi_square_test",
-            "logistic_regression",
-        ]
+        return list(PIPELINE_METHOD_NAMES)
 
     def recommend_algorithms(self) -> str:
         from .display import recommend_pipeline_steps
@@ -169,6 +76,7 @@ class Pipeline:
             [
                 ".explain()",
                 ".recommend_algorithms()",
+                ".available_algorithms()",
                 ".histogram(variable=...)",
                 ".help()",
             ],
@@ -199,6 +107,7 @@ class Pipeline:
             datasets=self.analysis_set.datasets,
             analysis_set_variables=self.analysis_set.variables,
             filters=self.filters,
+            longitudinal=self.longitudinal,
             handle_missing=self.handle_missing,
             outlier_handling=self.outlier_handling,
             new_columns=self.new_columns,
@@ -236,7 +145,7 @@ class Pipeline:
 
     def _preprocessing_user_summary(self) -> list[dict[str, Any]] | None:
         items: list[dict[str, Any]] = []
-        for step in (self.handle_missing, self.outlier_handling):
+        for step in (self.longitudinal, self.handle_missing, self.outlier_handling):
             if step is not None:
                 items.append(step.user_summary())
         for step in self.new_columns:
@@ -259,6 +168,7 @@ class Pipeline:
         from .request_builder import build_preprocessing_steps
 
         return build_preprocessing_steps(
+            longitudinal=self.longitudinal,
             handle_missing=self.handle_missing,
             outlier_handling=self.outlier_handling,
             new_columns=self.new_columns,

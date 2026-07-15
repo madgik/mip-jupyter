@@ -4,7 +4,7 @@ from platform_token_service import PlatformTokenHandler
 from platform_token_utils import normalize_cpu, normalize_memory, refresh_access_token, token_is_expired
 
 
-QWEN_CODEX_MODEL = "qwen36-nvfp4"
+DEFAULT_CODEX_MODEL = "nemotron3-super-nvfp4"
 
 
 def _env(name, default=""):
@@ -105,7 +105,7 @@ _spawner_env = {
 _codex_base_url = _env("CODEX_VLLM_BASE_URL")
 if _codex_base_url:
     _spawner_env["CODEX_VLLM_BASE_URL"] = _codex_base_url
-    _spawner_env["CODEX_VLLM_MODEL"] = QWEN_CODEX_MODEL
+    _spawner_env["CODEX_VLLM_MODEL"] = _env("CODEX_VLLM_MODEL", DEFAULT_CODEX_MODEL)
     _codex_provider = _env("CODEX_VLLM_PROVIDER")
     if _codex_provider:
         _spawner_env["CODEX_VLLM_PROVIDER"] = _codex_provider

@@ -4,8 +4,10 @@ from unittest.mock import MagicMock
 
 from mip import AnalysisSet
 from mip import Pipeline
+from mip.catalog_registry import PIPELINE_BACKEND_ALGORITHMS
 from mip.filters import F
 from mip.preprocessing import CategoricalColumnCreator
+from mip.preprocessing import LongitudinalTransformer
 from mip.preprocessing import MissingValuesHandler
 from mip.preprocessing import OutlierWinsorizer
 
@@ -170,6 +172,76 @@ class TestPipeline(unittest.TestCase):
         self.assertNotIn("cognitive_profile", analysis["inputdata"]["variables"])
         self.assertIn("age", analysis["inputdata"]["variables"])
         self.assertIn("mmse", analysis["inputdata"]["variables"])
+
+    def test_available_algorithms_lists_all_wrappers(self):
+        transport = MagicMock()
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        analysis_set = AnalysisSet(
+            data_model=dm,
+            datasets=[_dataset("adni", "ADNI")],
+            variables=[age],
+        )
+        methods = Pipeline(analysis_set=analysis_set).available_algorithms()
+        self.assertEqual(len(methods), len(PIPELINE_BACKEND_ALGORITHMS))
+        self.assertIn("anova_oneway", methods)
+        self.assertIn("pca", methods)
+        self.assertIn("cox_regression_classical", methods)
+
+    def test_anova_oneway_posts_expected_payload(self):
+        transport = MagicMock()
+        transport.post.return_value = {"status": "success", "result": {}}
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        diagnosis = Var("diagnosis", label="Diagnosis")
+        analysis_set = AnalysisSet(
+            data_model=dm,
+            datasets=[_dataset("adni", "ADNI")],
+            variables=[age, diagnosis],
+        )
+
+        Pipeline(analysis_set=analysis_set).anova_oneway(group_by=diagnosis, outcome=age)
+
+        analysis = transport.post.call_args.args[1]["analysis"]
+        self.assertEqual(analysis["algorithm"]["name"], "anova_oneway")
+        self.assertEqual(analysis["algorithm"]["x"], ["diagnosis"])
+        self.assertEqual(analysis["algorithm"]["y"], ["age"])
+
+    def test_pipeline_serializes_longitudinal_preprocessing(self):
+        transport = MagicMock()
+        transport.post.return_value = {"status": "success", "result": {}}
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        mmse = Var("mmse", label="MMSE")
+        analysis_set = AnalysisSet(
+            data_model=dm,
+            datasets=[_dataset("adni", "ADNI")],
+            variables=[age, mmse],
+        )
+        transformer = LongitudinalTransformer(
+            visit1="BL",
+            visit2="FL1",
+            strategies={age: "diff", mmse: "second"},
+        )
+
+        Pipeline(
+            analysis_set=analysis_set,
+            longitudinal=transformer,
+            handle_missing=MissingValuesHandler(strategies={age: "median"}),
+        ).paired_t_test(measurement_1=age, measurement_2=mmse)
+
+        analysis = transport.post.call_args.args[1]["analysis"]
+        self.assertEqual(
+            [step["name"] for step in analysis["preprocessing"]],
+            ["longitudinal_transformer", "missing_values_handler"],
+        )
+        self.assertEqual(analysis["algorithm"]["name"], "ttest_paired")
+        variables = analysis["inputdata"]["variables"]
+        self.assertIn("dataset", variables)
+        self.assertIn("subjectid", variables)
+        self.assertIn("visitid", variables)
+        self.assertIn("age", variables)
+        self.assertIn("mmse", variables)
 
 
 if __name__ == "__main__":

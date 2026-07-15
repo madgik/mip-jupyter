@@ -14,12 +14,23 @@ MIP_PERSONA_DESCRIPTION = (
     "MIP notebook assistant for cohort discovery and federated analysis, not general chat."
 )
 VLLM_UNAVAILABLE_MESSAGE = (
-    "Cohort Scout cannot reach the qwen vLLM model service right now."
+    "Cohort Scout cannot reach the vLLM model service right now."
     "\n\nYour notebook and MIP platform connection are unaffected, but AI chat replies "
     "are unavailable until the model service is back."
     "\n\nTry again later, or ask your platform administrator to check the Jupyter AI "
     "model service. For local development, verify `CODEX_VLLM_BASE_URL` points to a "
     "reachable `/v1` endpoint."
+)
+
+TOOL_CALL_PARSE_ERROR_MESSAGE = (
+    "Cohort Scout hit a tool-call formatting error from the local model."
+    "\n\nThis usually happens when a long code payload is sent in one tool call and "
+    "the model returns invalid JSON. Your notebook and MIP connection are fine."
+    "\n\nStart a **new chat** and resume from existing `scratch/*.py` artifacts with "
+    "smaller steps (`scratch-list`, then `scratch-copy-template`, `scratch-append-lines`, "
+    "`scratch-replace-snippet`). Continue the newest complete script in scratch/. "
+    "Do not retry write commands without `scratch-list` or "
+    "`notebook-outline` first. Do not retry heredocs or large shell writes."
 )
 
 _VLLM_UNAVAILABLE_MARKERS = (
@@ -47,9 +58,16 @@ _VLLM_UNAVAILABLE_MARKERS = (
 )
 
 
-def is_vllm_unavailable_error(error: BaseException) -> bool:
-    """Return whether an ACP/Codex error likely means the qwen vLLM service is down."""
+_TOOL_CALL_PARSE_MARKERS = (
+    "expecting ',' delimiter",
+    "failed to parse function arguments",
+    "invalid number at line",
+    "badrequesterror",
+    "json decode",
+)
 
+
+def _error_text(error: BaseException) -> str:
     parts = [str(error)]
     data = getattr(error, "data", None)
     if data is not None:
@@ -61,7 +79,23 @@ def is_vllm_unavailable_error(error: BaseException) -> bool:
     if context is not None:
         parts.append(str(context))
 
-    text = " ".join(parts).lower()
+    return " ".join(parts)
+
+
+def is_tool_call_parse_error(error: BaseException) -> bool:
+    """Return whether an ACP/Codex error likely means the model returned bad tool JSON."""
+
+    text = _error_text(error).lower()
+    return any(marker in text for marker in _TOOL_CALL_PARSE_MARKERS)
+
+
+def is_vllm_unavailable_error(error: BaseException) -> bool:
+    """Return whether an ACP/Codex error likely means the vLLM service is down."""
+
+    if is_tool_call_parse_error(error):
+        return False
+
+    text = _error_text(error).lower()
     return any(marker in text for marker in _VLLM_UNAVAILABLE_MARKERS)
 
 
@@ -80,6 +114,9 @@ class CohortScoutPersona(CodexAcpPersona):
         try:
             await BaseAcpPersona.process_message(self, message)
         except RequestError as error:
+            if is_tool_call_parse_error(error):
+                await self.handle_tool_call_parse_error(error)
+                return
             if is_vllm_unavailable_error(error):
                 await self.handle_vllm_unavailable(error)
                 return
@@ -89,17 +126,27 @@ class CohortScoutPersona(CodexAcpPersona):
                 return
             raise
         except Exception as error:
+            if is_tool_call_parse_error(error):
+                await self.handle_tool_call_parse_error(error)
+                return
             if is_vllm_unavailable_error(error):
                 await self.handle_vllm_unavailable(error)
                 return
             raise
 
     async def handle_uncaught_exception(self, exc: Exception) -> None:
+        if is_tool_call_parse_error(exc):
+            await self.handle_tool_call_parse_error(exc)
+            return
         if is_vllm_unavailable_error(exc):
             await self.handle_vllm_unavailable(exc)
             return
         await super().handle_uncaught_exception(exc)
 
+    async def handle_tool_call_parse_error(self, error: BaseException) -> None:
+        self.log.warning("[%s] tool-call JSON parse error: %s", MIP_PERSONA_NAME, error)
+        self.send_message(TOOL_CALL_PARSE_ERROR_MESSAGE)
+
     async def handle_vllm_unavailable(self, error: BaseException) -> None:
-        self.log.warning("[%s] qwen vLLM unavailable: %s", MIP_PERSONA_NAME, error)
+        self.log.warning("[%s] vLLM unavailable: %s", MIP_PERSONA_NAME, error)
         self.send_message(VLLM_UNAVAILABLE_MESSAGE)

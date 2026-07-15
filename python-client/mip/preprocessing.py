@@ -84,6 +84,37 @@ class OutlierWinsorizer(PreprocessingStep):
         }
 
 
+LONGITUDINAL_REQUIRED_VARIABLES = ("dataset", "subjectid", "visitid")
+
+
+class LongitudinalTransformer(PreprocessingStep):
+    name = "longitudinal_transformer"
+
+    def __init__(
+        self,
+        *,
+        visit1: str,
+        visit2: str,
+        strategies: Mapping[Any, str],
+    ):
+        self.visit1 = visit1
+        self.visit2 = visit2
+        self._strategies = dict(strategies or {})
+        super().__init__(
+            visit1=visit1,
+            visit2=visit2,
+            strategies=_serialize_mapping(self._strategies),
+        )
+
+    def user_summary(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "visit1": self.visit1,
+            "visit2": self.visit2,
+            "strategies": {public_label(key): value for key, value in self._strategies.items()},
+        }
+
+
 class CategoricalColumnCreator(PreprocessingStep):
     name = "categorical_column_creator"
 
@@ -138,3 +169,12 @@ class CategoricalColumnCreator(PreprocessingStep):
             "categories": self.enumerations,
             "default_category": self.default_enumeration,
         }
+
+
+PREPROCESSING_STEP_CLASSES = (
+    LongitudinalTransformer,
+    MissingValuesHandler,
+    OutlierWinsorizer,
+    CategoricalColumnCreator,
+)
+PREPROCESSING_STEP_NAMES: tuple[str, ...] = tuple(cls.name for cls in PREPROCESSING_STEP_CLASSES)

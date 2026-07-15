@@ -6,6 +6,7 @@ import json
 import os
 import re
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any
@@ -13,11 +14,50 @@ from typing import Literal
 
 
 GUIDE_RELATIVE_PATH = Path("llm") / "wiki" / "00-agent-workspace.md"
+ALLOWED_WIKI_PAGES: dict[str, Path] = {
+    "index": Path("llm") / "INDEX.md",
+    "00-agent-workspace": GUIDE_RELATIVE_PATH,
+    "01-onboarding": Path("llm") / "wiki" / "01-onboarding.md",
+    "02-analysis-workflow": Path("llm") / "wiki" / "02-analysis-workflow.md",
+    "03-mip-client-api": Path("llm") / "wiki" / "03-mip-client-api.md",
+    "04-jupyter-mcp": Path("llm") / "wiki" / "04-jupyter-mcp.md",
+    "05-env-and-backend": Path("llm") / "wiki" / "05-env-and-backend.md",
+    "06-runtime-state": Path("llm") / "wiki" / "06-runtime-state.md",
+    "07-pipeline-algorithms": Path("llm") / "wiki" / "07-pipeline-algorithms.md",
+    "agent-exploration": Path("llm") / "wiki" / "agent-exploration.md",
+    "dev-contributor": Path("llm") / "wiki" / "dev-contributor.md",
+    "recipes/stroke-analysis": Path("llm") / "wiki" / "recipes" / "stroke-analysis.md",
+}
 BLOCKED_PATH_PARTS = {".ipynb_checkpoints", ".venv", ".playwright-cli", "__pycache__"}
 MAX_DOC_RESULTS = 10
 MAX_DOC_SNIPPET_CHARS = 600
+MAX_WIKI_CONTENT_CHARS = 8000
 MAX_CELL_READ_CHARS = 20000
+MAX_CELL_WRITE_CHARS = 4000
+MAX_SCRATCH_APPEND_LINES = 20
+MAX_SCRATCH_APPEND_CHARS = 2048
+MAX_SCRATCH_SNIPPET_CHARS = 1024
+SCRATCH_TEMPLATE_DEFAULT = "examples/algorithm_examples.py"
+SCRATCH_BOTTLENECK_PATH = "scratch/_bottlenecks.md"
+SCRATCH_BOTTLENECK_TEMPLATE = "scratch/_bottlenecks.template.md"
+SCRATCH_SESSION_PATH = "scratch/_session.md"
+SCRATCH_SESSION_TEMPLATE = "scratch/_session.template.md"
+ALLOWED_SCRATCH_TEMPLATES = frozenset(
+    {
+        SCRATCH_SESSION_TEMPLATE,
+        SCRATCH_BOTTLENECK_TEMPLATE,
+    }
+)
+MAX_SCRATCH_READ_CHARS = 8000
+MAX_SCRATCH_LIST_ITEMS = 50
+MAX_SCRATCH_BOTTLENECK_FIELD = 120
+MAX_SCRATCH_BOTTLENECK_NOTE = 360
+MAX_NOTEBOOK_OUTLINE_CELLS = 100
+MAX_EXECUTED_CELL_SUMMARIES = 20
 MAX_LIST_ITEMS = 100
+MAX_METADATA_ITEM_CHARS = 512
+MAX_METADATA_STRING_CHARS = 240
+MAX_RESPONSE_JSON_CHARS = 24000
 SAFE_JUPYTER_MCP_TOOLS = [
     "mip_jupyter_dev.jupyter_mcp_tools:agent_read_guide",
     "mip_jupyter_dev.jupyter_mcp_tools:agent_search_docs",
@@ -35,6 +75,15 @@ SAFE_JUPYTER_MCP_TOOLS = [
     "mip_jupyter_dev.jupyter_mcp_tools:mip_data_model_summary",
     "mip_jupyter_dev.jupyter_mcp_tools:mip_search_variables",
     "mip_jupyter_dev.jupyter_mcp_tools:mip_algorithm_summary",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_copy_template",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_copy_file",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_init",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_read",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_append_lines",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_replace_snippet",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_to_notebook",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_list",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_log_bottleneck",
 ]
 
 
@@ -120,6 +169,14 @@ def _limit(value: int | str | None, default: int, maximum: int) -> int:
     except (TypeError, ValueError):
         return default
     return max(1, min(parsed, maximum))
+
+
+def _validate_cell_content(content: str, *, label: str = "content") -> None:
+    if len(content) > MAX_CELL_WRITE_CHARS:
+        raise ValueError(
+            f"{label} exceeds {MAX_CELL_WRITE_CHARS} characters; "
+            "split into smaller scratch-append-lines or append-code calls."
+        )
 
 
 def _truncate(text: Any, max_chars: int, *, suffix: str = "...") -> str:
@@ -243,6 +300,47 @@ def _new_cell(content: str, cell_type: Literal["code", "markdown", "raw"]) -> di
     return cell
 
 
+def _last_cell_source_equals(data: dict[str, Any], content: str, cell_type: str) -> bool:
+    cells = data.get("cells") or []
+    if not cells:
+        return False
+    last = cells[-1]
+    if last.get("cell_type") != cell_type:
+        return False
+    return _cell_source(last) == str(content or "")
+
+
+def _normalized_append_chunk(chunk: str) -> str:
+    text = str(chunk or "")
+    if not text.endswith("\n"):
+        text += "\n"
+    return text
+
+
+def _scratch_file_ends_with(file_path: Path, chunk: str) -> bool:
+    if not file_path.is_file():
+        return False
+    existing = file_path.read_text(encoding="utf-8")
+    return existing.endswith(_normalized_append_chunk(chunk))
+
+
+def _scratch_source_marker(script_rel: Path, script_file: Path) -> dict[str, Any]:
+    stat = script_file.stat()
+    return {
+        "path": script_rel.as_posix(),
+        "size_bytes": stat.st_size,
+        "mtime": stat.st_mtime,
+    }
+
+
+def _notebook_scratch_marker_matches(data: dict[str, Any], marker: dict[str, Any]) -> bool:
+    metadata = data.get("metadata") or {}
+    stored = metadata.get("mip_scratch_source")
+    if not isinstance(stored, dict):
+        return False
+    return stored == marker
+
+
 def _agent_docs_root() -> Path | None:
     configured = os.getenv("MIP_AGENT_DOCS")
     if configured:
@@ -258,16 +356,28 @@ def _agent_docs_root() -> Path | None:
     return None
 
 
-def _agent_guide_path() -> Path | None:
+def _wiki_page_key(page: str | None) -> str:
+    key = str(page or "00-agent-workspace").strip().replace("\\", "/")
+    if key.endswith(".md"):
+        key = key[:-3]
+    if key not in ALLOWED_WIKI_PAGES:
+        allowed = ", ".join(sorted(ALLOWED_WIKI_PAGES))
+        raise ValueError(f"Unknown agent wiki page {page!r}; allowed pages: {allowed}")
+    return key
+
+
+def _agent_wiki_path(page: str | None = None) -> tuple[str, Path | None]:
+    page_key = _wiki_page_key(page)
+    relative_path = ALLOWED_WIKI_PAGES[page_key]
     candidates: list[Path] = []
     agent_root = _agent_docs_root()
     if agent_root is not None:
-        candidates.append(agent_root / GUIDE_RELATIVE_PATH)
-        candidates.append(agent_root / "docs" / GUIDE_RELATIVE_PATH)
+        candidates.append(agent_root / relative_path)
+        candidates.append(agent_root / "docs" / relative_path)
     for path in candidates:
         if path.is_file():
-            return path
-    return None
+            return page_key, path
+    return page_key, None
 
 
 def _doc_files() -> list[Path]:
@@ -329,15 +439,22 @@ def _section_matches(text: str, topic: str) -> list[str]:
     return sections
 
 
-async def agent_read_guide(topic: str | None = None) -> dict[str, Any]:
-    """Read the agent workspace guide, optionally narrowed by topic."""
+async def agent_read_guide(
+    page: str | None = None,
+    topic: str | None = None,
+    max_chars: int = 4000,
+) -> dict[str, Any]:
+    """Read an allowlisted agent wiki page, optionally narrowed by topic."""
 
-    guide_path = _agent_guide_path()
+    page_key, guide_path = _agent_wiki_path(page)
+    relative_path = ALLOWED_WIKI_PAGES[page_key]
+    max_chars = _limit(max_chars, 4000, MAX_WIKI_CONTENT_CHARS)
     if guide_path is None:
         return {
             "ok": False,
-            "path": GUIDE_RELATIVE_PATH.as_posix(),
-            "error": "Agent workspace guide is missing.",
+            "page": page_key,
+            "path": relative_path.as_posix(),
+            "error": "Agent wiki page is missing.",
         }
     text = guide_path.read_text(encoding="utf-8")
     if topic:
@@ -345,13 +462,13 @@ async def agent_read_guide(topic: str | None = None) -> dict[str, Any]:
         content = "\n\n".join(matches) if matches else ""
     else:
         content = text
-    display_path = GUIDE_RELATIVE_PATH.as_posix()
     return {
         "ok": True,
-        "path": display_path,
+        "page": page_key,
+        "path": relative_path.as_posix(),
         "topic": topic,
-        "content": _truncate(content, 8000),
-        "truncated": len(content) > 8000,
+        "content": _truncate(content, max_chars),
+        "truncated": len(content) > max_chars,
     }
 
 
@@ -382,16 +499,23 @@ async def agent_search_docs(query: str, limit: int = 5) -> dict[str, Any]:
     return {"ok": True, "query": query, "count": len(results), "results": results[:limit]}
 
 
-async def notebook_outline(path: str) -> dict[str, Any]:
+async def notebook_outline(
+    path: str,
+    max_cells: int = MAX_NOTEBOOK_OUTLINE_CELLS,
+) -> dict[str, Any]:
     """Return a bounded notebook outline without full outputs."""
 
     relative, _file_path, data = _read_notebook_data(path)
     cells = data.get("cells") or []
+    max_cells = _limit(max_cells, MAX_NOTEBOOK_OUTLINE_CELLS, MAX_NOTEBOOK_OUTLINE_CELLS)
+    visible_cells = cells[:max_cells]
     return {
         "ok": True,
         "path": relative.as_posix(),
         "cell_count": len(cells),
-        "cells": [_outline_cell(index, cell) for index, cell in enumerate(cells)],
+        "cells": [_outline_cell(index, cell) for index, cell in enumerate(visible_cells)],
+        "cells_truncated": len(cells) > max_cells,
+        "truncated_cell_count": max(0, len(cells) - max_cells),
     }
 
 
@@ -438,7 +562,15 @@ async def create_notebook(path: str, kernel_name: str = "python3") -> dict[str, 
 async def append_markdown_cell(path: str, content: str) -> dict[str, Any]:
     """Append a markdown cell to a notebook."""
 
+    _validate_cell_content(content, label="markdown")
     relative, file_path, data = _read_notebook_data(path)
+    if _last_cell_source_equals(data, content, "markdown"):
+        return {
+            "ok": True,
+            "path": relative.as_posix(),
+            "index": len(data["cells"]) - 1,
+            "deduplicated": True,
+        }
     data["cells"].append(_new_cell(content, "markdown"))
     _write_notebook_data(file_path, data)
     return {"ok": True, "path": relative.as_posix(), "index": len(data["cells"]) - 1}
@@ -447,7 +579,15 @@ async def append_markdown_cell(path: str, content: str) -> dict[str, Any]:
 async def append_code_cell(path: str, content: str) -> dict[str, Any]:
     """Append a code cell to a notebook."""
 
+    _validate_cell_content(content, label="code")
     relative, file_path, data = _read_notebook_data(path)
+    if _last_cell_source_equals(data, content, "code"):
+        return {
+            "ok": True,
+            "path": relative.as_posix(),
+            "index": len(data["cells"]) - 1,
+            "deduplicated": True,
+        }
     data["cells"].append(_new_cell(content, "code"))
     _write_notebook_data(file_path, data)
     return {"ok": True, "path": relative.as_posix(), "index": len(data["cells"]) - 1}
@@ -461,6 +601,7 @@ async def edit_cell_by_index(
 ) -> dict[str, Any]:
     """Replace a notebook cell by numeric index."""
 
+    _validate_cell_content(content, label="cell")
     relative, file_path, data = _read_notebook_data(path)
     cells = data.get("cells") or []
     if index < 0 or index >= len(cells):
@@ -483,25 +624,37 @@ def _execute_notebook(path: Path, data: dict[str, Any], *, timeout: float, index
         if index < 0 or index >= len(cells):
             raise IndexError(f"Cell index {index} is out of range for {len(cells)} cells.")
         selected = deepcopy(notebook_node)
-        selected.cells = [deepcopy(cells[index])]
+        selected.cells = [deepcopy(cells[cell_index]) for cell_index in range(index + 1)]
         NotebookClient(selected, timeout=timeout, allow_errors=True).execute()
-        notebook_node.cells[index] = selected.cells[0]
+        notebook_node.cells[index] = selected.cells[index]
         executed_indexes = [index]
     else:
         NotebookClient(notebook_node, timeout=timeout, allow_errors=True).execute()
         executed_indexes = list(range(len(cells)))
 
     nbformat.write(notebook_node, path)
+    executed_cell_count = len(executed_indexes)
     executed_cells = [
         _outline_cell(cell_index, json.loads(json.dumps(notebook_node.cells[cell_index])))
-        for cell_index in executed_indexes
+        for cell_index in executed_indexes[:MAX_EXECUTED_CELL_SUMMARIES]
     ]
-    total_errors = sum(int(cell["error_count"]) for cell in executed_cells)
-    return {"ok": total_errors == 0, "executed_cells": executed_cells, "error_count": total_errors}
+    total_errors = sum(
+        1
+        for cell_index in executed_indexes
+        for output in (notebook_node.cells[cell_index].get("outputs") or [])
+        if output.get("output_type") == "error"
+    )
+    return {
+        "ok": total_errors == 0,
+        "executed_cells": executed_cells,
+        "executed_cell_count": executed_cell_count,
+        "executed_cells_truncated": executed_cell_count > MAX_EXECUTED_CELL_SUMMARIES,
+        "error_count": total_errors,
+    }
 
 
 async def run_cell_by_index(path: str, index: int, timeout: float = 30.0) -> dict[str, Any]:
-    """Execute one notebook cell in an isolated kernel and write its outputs."""
+    """Execute one notebook cell and its prerequisite code cells in one kernel."""
 
     relative, file_path, data = _read_notebook_data(path)
     result = _execute_notebook(file_path, data, timeout=float(timeout), index=index)
@@ -556,7 +709,75 @@ def _mip_client():
 
 
 def _tool_error(exc: Exception) -> dict[str, Any]:
-    return {"ok": False, "error_type": type(exc).__name__, "error": str(exc)}
+    return {
+        "ok": False,
+        "error_type": type(exc).__name__,
+        "error": _truncate(str(exc), MAX_METADATA_STRING_CHARS),
+    }
+
+
+_METADATA_PRIORITY = (
+    "code",
+    "id",
+    "slug",
+    "name",
+    "label",
+    "type",
+    "version",
+    "desc",
+    "description",
+    "n_variables",
+    "n_datasets",
+    "n_groups",
+    "n_rows",
+)
+
+
+def _compact_metadata_item(item: Any) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {"value": _truncate(item, MAX_METADATA_ITEM_CHARS)}
+
+    compact: dict[str, Any] = {}
+    for key in _METADATA_PRIORITY:
+        if key not in item:
+            continue
+        value = item[key]
+        if isinstance(value, str):
+            compact[key] = _truncate(value, MAX_METADATA_STRING_CHARS)
+        elif value is None or isinstance(value, (bool, int, float)):
+            compact[key] = value
+
+    if len(json.dumps(compact, ensure_ascii=False)) <= MAX_METADATA_ITEM_CHARS:
+        return compact
+
+    fitted: dict[str, Any] = {}
+    for key in _METADATA_PRIORITY:
+        if key not in compact:
+            continue
+        candidate = {**fitted, key: compact[key]}
+        if len(json.dumps(candidate, ensure_ascii=False)) <= MAX_METADATA_ITEM_CHARS:
+            fitted = candidate
+    return fitted
+
+
+def _compact_metadata_items(items: list[Any], limit: int) -> list[dict[str, Any]]:
+    return [_compact_metadata_item(item) for item in items[:limit]]
+
+
+def _bounded_metadata_response(
+    payload: dict[str, Any],
+    *,
+    list_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    payload["response_truncated"] = False
+    while len(json.dumps(payload, ensure_ascii=False)) > MAX_RESPONSE_JSON_CHARS:
+        candidates = [key for key in list_keys if payload.get(key)]
+        if not candidates:
+            break
+        key = max(candidates, key=lambda candidate: len(payload[candidate]))
+        payload[key].pop()
+        payload["response_truncated"] = True
+    return payload
 
 
 async def mip_catalog_summary(limit: int = 20) -> dict[str, Any]:
@@ -567,12 +788,15 @@ async def mip_catalog_summary(limit: int = 20) -> dict[str, Any]:
         summaries = _mip_client().catalog().summaries()
     except Exception as exc:  # noqa: BLE001 - MCP tools should return structured errors.
         return _tool_error(exc)
-    return {
+    return _bounded_metadata_response(
+        {
         "ok": True,
         "count": len(summaries),
-        "items": summaries[:limit],
+        "items": _compact_metadata_items(summaries, limit),
         "truncated": len(summaries) > limit,
-    }
+        },
+        list_keys=("items",),
+    )
 
 
 async def mip_data_model_summary(
@@ -590,16 +814,20 @@ async def mip_data_model_summary(
     except Exception as exc:  # noqa: BLE001 - MCP tools should return structured errors.
         return _tool_error(exc)
 
-    return {
+    result = {
         "ok": True,
-        "summary": data_model.summary(),
-        "datasets": datasets[:MAX_LIST_ITEMS],
+        "summary": _compact_metadata_item(data_model.summary()),
+        "datasets": _compact_metadata_items(datasets, MAX_LIST_ITEMS),
         "datasets_truncated": len(datasets) > MAX_LIST_ITEMS,
-        "groups": groups[:MAX_LIST_ITEMS],
+        "groups": _compact_metadata_items(groups, MAX_LIST_ITEMS),
         "groups_truncated": len(groups) > MAX_LIST_ITEMS,
-        "variables": variables[:MAX_LIST_ITEMS],
+        "variables": _compact_metadata_items(variables, MAX_LIST_ITEMS),
         "variables_truncated": len(variables) > MAX_LIST_ITEMS,
     }
+    return _bounded_metadata_response(
+        result,
+        list_keys=("datasets", "groups", "variables"),
+    )
 
 
 async def mip_search_variables(
@@ -616,15 +844,18 @@ async def mip_search_variables(
         matches = [variable.summary() for variable in data_model.variables.search(query)]
     except Exception as exc:  # noqa: BLE001 - MCP tools should return structured errors.
         return _tool_error(exc)
-    return {
+    return _bounded_metadata_response(
+        {
         "ok": True,
         "code": code,
         "version": version,
         "query": query,
         "count": len(matches),
-        "items": matches[:limit],
+        "items": _compact_metadata_items(matches, limit),
         "truncated": len(matches) > limit,
-    }
+        },
+        list_keys=("items",),
+    )
 
 
 async def mip_algorithm_summary() -> dict[str, Any]:
@@ -640,10 +871,368 @@ async def mip_algorithm_summary() -> dict[str, Any]:
     for item in summaries:
         kind = str(item.get("type") or "unknown")
         counts_by_type[kind] = counts_by_type.get(kind, 0) + 1
+    return _bounded_metadata_response(
+        {
+            "ok": True,
+            "count": len(summaries),
+            "counts_by_type": counts_by_type,
+            "items": _compact_metadata_items(summaries, MAX_LIST_ITEMS),
+            "truncated": len(summaries) > MAX_LIST_ITEMS,
+        },
+        list_keys=("items",),
+    )
+
+
+def _scratch_file(path: str) -> tuple[Path, Path]:
+    relative = _workspace_relative_path(path)
+    if not relative.as_posix().startswith("scratch/"):
+        raise ValueError("Scratch paths must stay under scratch/.")
+    if not str(relative).endswith(".py"):
+        raise ValueError("Scratch file must be a .py script.")
+    file_path = _workspace_root() / relative
+    return relative, file_path
+
+
+def _scratch_copy_source(path: str) -> tuple[Path, Path]:
+    relative = _workspace_relative_path(path)
+    key = relative.as_posix()
+    if not str(relative).endswith(".py"):
+        raise ValueError("Copy source must be a .py script.")
+    if not (key.startswith("examples/") or key.startswith("scratch/")):
+        raise ValueError("Copy source must stay under examples/ or scratch/.")
+    file_path = _workspace_root() / relative
+    return relative, file_path
+
+
+async def scratch_copy_template(
+    dest: str,
+    source: str = SCRATCH_TEMPLATE_DEFAULT,
+) -> dict[str, Any]:
+    """Copy an examples/ or scratch/ script into a new scratch analysis script."""
+
+    src_rel, src_path = _scratch_copy_source(source)
+    dest_rel, dest_path = _scratch_file(dest)
+    if dest_path.exists():
+        raise FileExistsError(f"Destination already exists: {dest_rel.as_posix()}")
+    if not src_path.is_file():
+        raise FileNotFoundError(f"Template not found: {src_rel.as_posix()}")
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
+    return {"ok": True, "source": src_rel.as_posix(), "dest": dest_rel.as_posix()}
+
+
+async def scratch_copy_file(
+    dest: str,
+    source: str,
+) -> dict[str, Any]:
+    """Copy an allowlisted scratch Markdown template to a new scratch file."""
+
+    src_rel = _workspace_relative_path(source)
+    src_key = src_rel.as_posix()
+    if src_key not in ALLOWED_SCRATCH_TEMPLATES:
+        allowed = ", ".join(sorted(ALLOWED_SCRATCH_TEMPLATES))
+        raise ValueError(f"Unknown scratch template {source!r}; allowed templates: {allowed}")
+    dest_rel, dest_path = _scratch_markdown_file(dest)
+    src_rel, src_path = _scratch_markdown_file(source)
+    if dest_path.exists():
+        raise FileExistsError(f"Destination already exists: {dest_rel.as_posix()}")
+    if not src_path.is_file():
+        raise FileNotFoundError(f"Template not found: {src_rel.as_posix()}")
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
+    return {"ok": True, "source": src_rel.as_posix(), "dest": dest_rel.as_posix()}
+
+
+async def scratch_init() -> dict[str, Any]:
+    """Create scratch/_session.md and scratch/_bottlenecks.md from shipped templates."""
+
+    created: list[str] = []
+    skipped: list[str] = []
+    for source, dest in (
+        (SCRATCH_SESSION_TEMPLATE, SCRATCH_SESSION_PATH),
+        (SCRATCH_BOTTLENECK_TEMPLATE, SCRATCH_BOTTLENECK_PATH),
+    ):
+        dest_rel, dest_path = _scratch_markdown_file(dest)
+        if dest_path.exists():
+            skipped.append(dest_rel.as_posix())
+            continue
+        copied = await scratch_copy_file(dest, source)
+        created.append(copied["dest"])
+    return {"ok": True, "created": created, "skipped": skipped}
+
+
+async def scratch_read(path: str, max_chars: int = 4000) -> dict[str, Any]:
+    """Read a bounded scratch .md or .py artifact."""
+
+    relative, file_path = _scratch_read_path(path)
+    max_chars = _limit(max_chars, 4000, MAX_SCRATCH_READ_CHARS)
+    if not file_path.is_file():
+        raise FileNotFoundError(f"Scratch file not found: {relative.as_posix()}")
+    text = file_path.read_text(encoding="utf-8")
     return {
         "ok": True,
-        "count": len(summaries),
-        "counts_by_type": counts_by_type,
-        "items": summaries[:MAX_LIST_ITEMS],
-        "truncated": len(summaries) > MAX_LIST_ITEMS,
+        "path": relative.as_posix(),
+        "content": text[:max_chars],
+        "content_chars": len(text),
+        "truncated": len(text) > max_chars,
+    }
+
+
+async def scratch_append_lines(path: str, lines: str) -> dict[str, Any]:
+    """Append a small chunk of lines to a scratch Python script."""
+
+    relative, file_path = _scratch_file(path)
+    chunk = _normalized_append_chunk(lines)
+    line_count = len(chunk.splitlines())
+    if line_count > MAX_SCRATCH_APPEND_LINES:
+        raise ValueError(
+            f"Append exceeds {MAX_SCRATCH_APPEND_LINES} lines; split into smaller calls."
+        )
+    if len(chunk) > MAX_SCRATCH_APPEND_CHARS:
+        raise ValueError(
+            f"Append exceeds {MAX_SCRATCH_APPEND_CHARS} characters; split into smaller calls."
+        )
+    if _scratch_file_ends_with(file_path, lines):
+        return {
+            "ok": True,
+            "path": relative.as_posix(),
+            "appended_lines": line_count,
+            "appended_chars": len(chunk),
+            "deduplicated": True,
+        }
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    with file_path.open("a", encoding="utf-8") as handle:
+        handle.write(chunk)
+    return {
+        "ok": True,
+        "path": relative.as_posix(),
+        "appended_lines": line_count,
+        "appended_chars": len(chunk),
+    }
+
+
+async def scratch_replace_snippet(
+    path: str,
+    old: str,
+    new: str,
+) -> dict[str, Any]:
+    """Replace one small snippet in a scratch Python script."""
+
+    relative, file_path = _scratch_file(path)
+    if len(old) > MAX_SCRATCH_SNIPPET_CHARS or len(new) > MAX_SCRATCH_SNIPPET_CHARS:
+        raise ValueError(
+            f"Snippet exceeds {MAX_SCRATCH_SNIPPET_CHARS} characters; use smaller replacements."
+        )
+    if not file_path.is_file():
+        raise FileNotFoundError(f"Scratch file not found: {relative.as_posix()}")
+    text = file_path.read_text(encoding="utf-8")
+    if old not in text:
+        raise ValueError("old snippet not found in scratch file.")
+    if text.count(old) > 1:
+        raise ValueError("old snippet is ambiguous; provide more context.")
+    file_path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    return {"ok": True, "path": relative.as_posix(), "replaced": True}
+
+
+def _split_script_into_cells(source: str) -> list[tuple[str, str]]:
+    """Split a .py script on # %% markers into (cell_type, content) pairs."""
+    cells: list[tuple[str, str]] = []
+    current_type = "code"
+    current_lines: list[str] = []
+    for line in source.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# %%") and "[markdown]" in stripped.lower():
+            if current_lines:
+                cells.append((current_type, "\n".join(current_lines).strip()))
+                current_lines = []
+            current_type = "markdown"
+            continue
+        if stripped == "# %%" or (stripped.startswith("# %%") and "markdown" not in stripped.lower()):
+            if current_lines:
+                cells.append((current_type, "\n".join(current_lines).strip()))
+                current_lines = []
+            current_type = "code"
+            continue
+        if current_type == "markdown" and stripped.startswith("#"):
+            current_lines.append(line.lstrip("# ").lstrip())
+        else:
+            current_lines.append(line)
+    if current_lines:
+        cells.append((current_type, "\n".join(current_lines).strip()))
+    return [cell for cell in cells if cell[1]]
+
+
+async def scratch_to_notebook(
+    script_path: str,
+    notebook_path: str,
+    *,
+    title: str | None = None,
+) -> dict[str, Any]:
+    """Transfer a verified scratch/*.py script into a notebook incrementally."""
+
+    script_rel, script_file = _scratch_file(script_path)
+    nb_rel, nb_file = _workspace_file(notebook_path)
+    if nb_file.suffix != ".ipynb":
+        raise ValueError("Notebook path must end with .ipynb.")
+    if not script_file.is_file():
+        raise FileNotFoundError(f"Script not found: {script_rel.as_posix()}")
+    source = script_file.read_text(encoding="utf-8")
+    cells = _split_script_into_cells(source)
+    if not cells:
+        raise ValueError("Script has no transferable cells; add # %% section markers.")
+
+    source_marker = _scratch_source_marker(script_rel, script_file)
+
+    if nb_file.exists():
+        _, _, data = _read_notebook_data(notebook_path)
+        if _notebook_scratch_marker_matches(data, source_marker):
+            return {
+                "ok": True,
+                "script": script_rel.as_posix(),
+                "notebook": nb_rel.as_posix(),
+                "cell_count": len(data["cells"]),
+                "deduplicated": True,
+            }
+    else:
+        data = _new_notebook("python3")
+
+    if title:
+        data["cells"].append(_new_cell(f"# {title}\n\nTransferred from `{script_rel.as_posix()}`.", "markdown"))
+
+    for cell_type, content in cells:
+        if len(content) > MAX_CELL_READ_CHARS:
+            raise ValueError(
+                f"Transferred {cell_type} cell exceeds {MAX_CELL_READ_CHARS} characters; "
+                "split the script into smaller # %% sections."
+            )
+        data["cells"].append(_new_cell(content, cell_type if cell_type in {"code", "markdown"} else "code"))
+
+    metadata = data.setdefault("metadata", {})
+    metadata["mip_scratch_source"] = source_marker
+
+    _write_notebook_data(nb_file, data)
+    return {
+        "ok": True,
+        "script": script_rel.as_posix(),
+        "notebook": nb_rel.as_posix(),
+        "cell_count": len(data["cells"]),
+    }
+
+
+def _scratch_markdown_file(path: str) -> tuple[PurePosixPath, Path]:
+    relative = _workspace_relative_path(path)
+    if not relative.as_posix().startswith("scratch/"):
+        raise ValueError("Scratch markdown paths must stay under scratch/.")
+    if not str(relative).endswith(".md"):
+        raise ValueError("Scratch markdown file must end with .md.")
+    file_path = _workspace_root() / relative
+    return relative, file_path
+
+
+def _scratch_read_path(path: str) -> tuple[Path, Path]:
+    relative = _workspace_relative_path(path)
+    if not relative.as_posix().startswith("scratch/"):
+        raise ValueError("Scratch read paths must stay under scratch/.")
+    if relative.suffix not in {".md", ".py"}:
+        raise ValueError("Scratch read supports .md and .py files only.")
+    file_path = _workspace_root() / relative
+    return relative, file_path
+
+
+def _first_line_summary(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith('"""') or stripped.startswith("'''"):
+            return stripped.strip("\"'")
+        if stripped.startswith("#"):
+            return stripped.lstrip("# ").strip()
+        return stripped[:MAX_METADATA_STRING_CHARS]
+    return ""
+
+
+async def scratch_list() -> dict[str, Any]:
+    """List scratch/*.py and scratch/*.md artifacts for resume."""
+
+    scratch_dir = _workspace_root() / "scratch"
+    items: list[dict[str, Any]] = []
+    if scratch_dir.is_dir():
+        for path in sorted(scratch_dir.iterdir()):
+            if path.name.startswith("."):
+                continue
+            if path.suffix not in {".py", ".md"}:
+                continue
+            stat = path.stat()
+            items.append(
+                {
+                    "path": f"scratch/{path.name}",
+                    "size_bytes": stat.st_size,
+                    "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+                    "first_line": _first_line_summary(path),
+                }
+            )
+    truncated = len(items) > MAX_SCRATCH_LIST_ITEMS
+    return _bounded_metadata_response(
+        {
+            "ok": True,
+            "count": len(items),
+            "items": items[:MAX_SCRATCH_LIST_ITEMS],
+            "truncated": truncated,
+        },
+        list_keys=("items",),
+    )
+
+
+def _escape_table_cell(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ").strip()
+
+
+async def scratch_log_bottleneck(
+    step: str,
+    status: str,
+    blocker: str,
+    note: str,
+) -> dict[str, Any]:
+    """Append one bottleneck row to scratch/_bottlenecks.md."""
+
+    for label, value, limit in (
+        ("step", step, MAX_SCRATCH_BOTTLENECK_FIELD),
+        ("status", status, MAX_SCRATCH_BOTTLENECK_FIELD),
+        ("blocker", blocker, MAX_SCRATCH_BOTTLENECK_FIELD),
+        ("note", note, MAX_SCRATCH_BOTTLENECK_NOTE),
+    ):
+        text = str(value or "").strip()
+        if not text:
+            raise ValueError(f"{label} is required.")
+        if len(text) > limit:
+            raise ValueError(f"{label} exceeds {limit} characters.")
+
+    relative, file_path = _scratch_markdown_file(SCRATCH_BOTTLENECK_PATH)
+    if not file_path.exists():
+        template_rel, template_path = _scratch_markdown_file(SCRATCH_BOTTLENECK_TEMPLATE)
+        if not template_path.is_file():
+            raise FileNotFoundError(f"Bottleneck template not found: {template_rel.as_posix()}")
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(template_path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    row = (
+        f"| {timestamp} | {_escape_table_cell(step)} | {_escape_table_cell(status)} | "
+        f"{_escape_table_cell(blocker)} | {_escape_table_cell(note)} |\n"
+    )
+    with file_path.open("a", encoding="utf-8") as handle:
+        handle.write(row)
+
+    return {
+        "ok": True,
+        "path": relative.as_posix(),
+        "appended": True,
+        "step": step,
+        "status": status,
+        "blocker": blocker,
     }

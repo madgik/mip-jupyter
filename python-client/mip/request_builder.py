@@ -8,6 +8,7 @@ from typing import Sequence
 
 from .derived import DerivedVariable
 from .labels import internal_code
+from .preprocessing import LONGITUDINAL_REQUIRED_VARIABLES
 
 
 def code(value: Any) -> str:
@@ -50,6 +51,7 @@ def collect_source_variables(
     *,
     analysis_set_variables: Sequence[Any],
     filters: Any = None,
+    longitudinal: Any = None,
     handle_missing: Any = None,
     outlier_handling: Any = None,
     new_columns: Sequence[Any] | None = None,
@@ -74,6 +76,12 @@ def collect_source_variables(
         add(variable)
     for field in collect_filter_fields(filters):
         add(field)
+    if longitudinal is not None:
+        for required in LONGITUDINAL_REQUIRED_VARIABLES:
+            add(required)
+        params = longitudinal.spec().get("parameters") or {}
+        for key in params.get("strategies") or {}:
+            add(key)
     if handle_missing is not None:
         params = handle_missing.spec().get("parameters") or {}
         for key in params.get("strategies") or {}:
@@ -150,12 +158,13 @@ def serialize_algorithm_roles(
 
 def build_preprocessing_steps(
     *,
+    longitudinal: Any = None,
     handle_missing: Any = None,
     outlier_handling: Any = None,
     new_columns: Iterable[Any] | None = None,
 ) -> list[dict[str, Any]] | None:
     steps: list[dict[str, Any]] = []
-    for step in (handle_missing, outlier_handling):
+    for step in (longitudinal, handle_missing, outlier_handling):
         if step is None:
             continue
         steps.append(step.spec())
@@ -171,6 +180,7 @@ def build_experiment_payload(
     datasets: Sequence[Any],
     analysis_set_variables: Sequence[Any],
     filters: Any = None,
+    longitudinal: Any = None,
     handle_missing: Any = None,
     outlier_handling: Any = None,
     new_columns: Sequence[Any] | None = None,
@@ -183,6 +193,7 @@ def build_experiment_payload(
     variables = collect_source_variables(
         analysis_set_variables=analysis_set_variables,
         filters=filters,
+        longitudinal=longitudinal,
         handle_missing=handle_missing,
         outlier_handling=outlier_handling,
         new_columns=new_columns,
@@ -200,6 +211,7 @@ def build_experiment_payload(
                 filters=filters,
             ),
             "preprocessing": build_preprocessing_steps(
+                longitudinal=longitudinal,
                 handle_missing=handle_missing,
                 outlier_handling=outlier_handling,
                 new_columns=new_columns,

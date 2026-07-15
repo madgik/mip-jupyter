@@ -244,9 +244,6 @@ def to_frame(items: Iterable[Any]):
     return pd.DataFrame(rows)
 
 
-from .labels import public_label
-
-
 def recommend_pipeline_steps(variables: Sequence[Any]) -> str:
     """Suggest pipeline methods based on selected variable types."""
     lines = ["Based on your selected variables:"]

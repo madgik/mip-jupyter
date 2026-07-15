@@ -1,8 +1,8 @@
 # Jupyter AI Codex Prototype
 
-This prototype adds Jupyter AI to the local JupyterLab workflow so developers can test a qwen-backed Codex assistant. The repository does not include personal credentials or tokens.
+This prototype adds Jupyter AI to the local JupyterLab workflow so developers can test a vLLM-backed Codex assistant. The repository does not include personal credentials or tokens.
 
-Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Cohort Scout at a qwen vLLM Responses-compatible `/v1/responses` endpoint and the `qwen36-nvfp4` model.
+Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Cohort Scout at a vLLM Responses-compatible `/v1/responses` endpoint and the `nemotron3-super-nvfp4` model.
 
 Architecture overview and Mermaid source: [jupyter-ai-architecture.md](jupyter-ai-architecture.md).
 
@@ -41,15 +41,15 @@ Install the Codex ACP adapter required by Jupyter AI:
 npm install -g @zed-industries/codex-acp
 ```
 
-The qwen Codex workflow uses a temporary `CODEX_HOME` containing `config.toml` and `model-catalog.json`:
+The vLLM Codex workflow uses a temporary `CODEX_HOME` containing `config.toml` and `model-catalog.json`:
 
 ```toml
-model = "qwen36-nvfp4"
-model_provider = "qwen_vllm"
+model = "nemotron3-super-nvfp4"
+model_provider = "vllm"
 model_catalog_json = "/tmp/mip-codex-home-.../model-catalog.json"
-model_context_window = 32768
-model_auto_compact_token_limit = 28000
-model_reasoning_effort = "minimal"
+model_context_window = 131072
+model_auto_compact_token_limit = 112000
+model_reasoning_effort = "medium"
 model_reasoning_summary = "none"
 model_supports_reasoning_summaries = false
 approval_policy = "never"
@@ -60,19 +60,23 @@ web_search = "disabled"
 [features]
 multi_agent = false
 
-[model_providers.qwen_vllm]
-name = "qwen vLLM"
+[model_providers.vllm]
+name = "vLLM"
 base_url = "http://100.92.46.71:8001/v1"
 wire_api = "responses"
 ```
 
-The generated model catalog contains only `qwen36-nvfp4` with a 32768-token context window. Catalog metadata intentionally keeps the Responses payload compatible with the current vLLM shim by setting `support_verbosity` to `false`, `apply_patch_tool_type` to `null`, `supports_parallel_tool_calls` to `false`, and `use_responses_lite` to `true`.
+The generated model catalog contains only `nemotron3-super-nvfp4` with a 131072-token context window. Catalog metadata intentionally keeps the Responses payload compatible with the current vLLM shim by setting `support_verbosity` to `false`, `apply_patch_tool_type` to `null`, `supports_parallel_tool_calls` to `false`, and `use_responses_lite` to `true`.
 
 The runner also prepends a generated `codex-acp` wrapper to `PATH`. The wrapper passes `-c approval_policy="never"`, `-c sandbox_mode="danger-full-access"`, and `-c shell_environment_policy.inherit="all"` directly to `codex-acp`; this is needed because the ACP process otherwise starts Codex with `on-request` approvals and a read-only sandbox even when the temporary `config.toml` contains the desired values.
 
-If the qwen vLLM endpoint is unavailable during a chat request, Cohort Scout catches the likely ACP/Codex connection error and replies with a short service-unavailable message instead of exposing a raw traceback to the user.
+If the vLLM endpoint is unavailable during a chat request, Cohort Scout catches the likely ACP/Codex connection error and replies with a short service-unavailable message instead of exposing a raw traceback to the user.
 
-The runner starts a curated Jupyter MCP wrapper server by default. It does not forward that server as native Responses `mcp` tools to Codex when using qwen vLLM, because the current vLLM Responses shim rejects native `mcp` and `web_search_preview` tool payloads with `Object of type Undefined is not JSON serializable`.
+The runner starts a curated Jupyter MCP wrapper server by default. Shell-bridge
+mode does not emit `builtin_mcp_servers` or a Codex `[mcp_servers]` section, so it
+does not forward that server as native Responses `mcp` tools to vLLM. The
+current vLLM Responses shim rejects native `mcp` and `web_search_preview` tool
+payloads with `Object of type Undefined is not JSON serializable`.
 
 Instead, Codex receives `JUPYTER_MCP_URL` and model instructions to call the MCP server through the shell bridge:
 
@@ -81,17 +85,21 @@ python -m mip_jupyter_dev.jupyter_mcp_cli create-notebook scratch/mcp_probe.ipyn
 python -m mip_jupyter_dev.jupyter_mcp_cli append-markdown scratch/mcp_probe.ipynb "MCP OK"
 ```
 
-The bridge still calls the Jupyter MCP server; it just avoids sending a native Responses `mcp` tool type to qwen vLLM. Native MCP forwarding can be enabled with `CODEX_ENABLE_NATIVE_JUPYTER_MCP=1` only for providers that support Responses MCP tools.
+The bridge still calls the Jupyter MCP server; it just avoids sending a native
+Responses `mcp` tool type to vLLM. Native MCP forwarding can be enabled with
+`CODEX_ENABLE_NATIVE_JUPYTER_MCP=1` only for providers that support Responses
+MCP tools. When native forwarding is enabled, the generated Codex config includes
+the MCP server and the model instructions allow native MCP calls.
 
 Restart JupyterLab after installing or changing agent binaries so Jupyter AI can rediscover available agents.
 
-To use a different qwen vLLM endpoint for local testing:
+To use a different vLLM endpoint for local testing:
 
 ```bash
 CODEX_VLLM_BASE_URL=http://127.0.0.1:8001/v1 uv run mip-notebook
 ```
 
-If the shell bridge regresses, native MCP forwarding should remain disabled for qwen vLLM. Verify the MCP server directly with:
+If the shell bridge regresses, native MCP forwarding should remain disabled for vLLM. Verify the MCP server directly with:
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli notebook-outline workspace/examples/feres_analysis.ipynb
@@ -103,7 +111,7 @@ For parallel local JupyterLab instances, use a different JupyterLab port. The ru
 JUPYTER_PORT=8892 uv run mip-notebook
 ```
 
-## Check the qwen vLLM endpoint
+## Check the vLLM endpoint
 
 From a machine connected to the same Tailscale network:
 
@@ -114,33 +122,37 @@ curl http://100.92.46.71:8001/v1/models
 Expected model IDs include:
 
 ```text
-qwen36-nvfp4
+nemotron3-super-nvfp4
 ```
 
-The local and Hub runners use `qwen36-nvfp4`.
+The local and Hub runners use `nemotron3-super-nvfp4`.
 
 The endpoint must support the Responses API path used by Codex:
 
 ```bash
 curl http://100.92.46.71:8001/v1/responses \
   -H 'Content-Type: application/json' \
-  -d '{"model":"qwen36-nvfp4","input":"Say OK only","max_output_tokens":256}'
+  -d '{"model":"nemotron3-super-nvfp4","input":"Say OK only","max_output_tokens":256}'
 ```
 
-`qwen36-nvfp4` may emit reasoning tokens before the final message; use a large enough `max_output_tokens` value in manual curl tests.
+`nemotron3-super-nvfp4` may emit reasoning tokens before the final message; use a large enough `max_output_tokens` value in manual curl tests.
 
 ## Agent Onboarding
 
 Jupyter AI Codex is steered by a layered wiki instead of ad-hoc repo exploration:
 
-- **Production Codex:** `agent_read_guide` reads `docs/llm/wiki/00-agent-workspace.md` from `/opt/mip-agent-docs/`; `agent_search_docs` searches user docs in workspace `docs/`.
+- **Production Codex:** `read-guide` reads the default workspace guide or an allowlisted routed page from `/opt/mip-agent-docs/`; `search-docs` searches user docs in workspace `docs/`.
 - [`AGENTS.md`](../AGENTS.md) — repository bootstrap entry point for Cursor and IDE agents
 - [`docs/llm/INDEX.md`](../docs/llm/INDEX.md) — wiki map and task routing table
 - [`docs/user/`](../docs/user/) — canonical user documentation (shipped to workspace `docs/`)
 
-The notebook runner injects slim `base_instructions` in the generated Codex model catalog that point production agents at `agent_read_guide` and the curated MCP tools.
+The notebook runner injects slim `base_instructions` in the generated Codex model catalog that point production agents at the routed wiki and curated MCP tools only when those sources are needed.
 
-Those base instructions also tell Cohort Scout to make substantial notebook examples work as plain Python first, then transfer the verified sequence into notebook cells.
+In shell-bridge mode, those instructions require Cohort Scout to use
+`jupyter_mcp_cli` for notebook and MIP tool actions; native `mcp__*` tools are
+disabled for vLLM. For substantial or multi-step workflows only, the agent
+may validate the analysis in a temporary Python file before transferring it to
+notebook cells.
 
 The production single-user image seeds `workspace/` and `docs/user/` into `/home/jovyan/work`, bundles agent wiki at `/opt/mip-agent-docs/`, and does not copy client source into the user file browser.
 
@@ -168,9 +180,30 @@ Use these prompts to verify that Cohort Scout follows the wiki instead of greppi
 
 | Prompt | Expected reads |
 |--------|----------------|
-| `@Cohort Scout explain how mip.Client.from_env() gets configuration` | `docs/llm/wiki/05-env-and-backend.md` or `python-client/mip/client.py` |
-| `@Cohort Scout summarize what a new MIP user should do first` | `docs/llm/wiki/01-onboarding.md` and optionally `workspace/Welcome.ipynb` |
-| `@Cohort Scout create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK` | MCP CLI only per `docs/llm/wiki/04-jupyter-mcp.md` |
+| `@Cohort Scout explain how mip.Client.from_env() gets configuration` | `read-guide --page 05-env-and-backend --topic "Client.from_env"` |
+| `@Cohort Scout summarize what a new MIP user should do first` | `read-guide --page 01-onboarding` and optionally `workspace/Welcome.ipynb` outline |
+| `@Cohort Scout create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK` | MCP CLI only; use `read-guide --page 04-jupyter-mcp` if command details are needed |
+| `@Cohort Scout run a novel statistical stroke analysis with significance on SSR` | `read-guide --page recipes/stroke-analysis --topic novel`; `mip-data-model-summary stroke --version 3.7`; `python scratch/stroke_preflight.py`; `scratch-copy-template scratch/<name>.py --source examples/algorithm_examples.py`; small `scratch-append-lines` / `scratch-replace-snippet` edits; run script; `scratch-to-notebook`; no heredocs |
+
+Success for the stroke prompt means: bounded metadata discovery, SSR-only dataset (no SSR+even/odd mix), preflight coverage check, a **new** scratch script derived from `examples/algorithm_examples.py` (trimmed to one hypothesis), federated `describe` / `t_test` / `chi_square_test` / `logistic_regression` (no `Pipeline.run()`), primary adjusted logistic **OR (95% CI)** on the OR scale, a populated `scratch/<name>.ipynb`, aggregate results only, and no giant shell payloads or raw row extraction.
+
+## Image smoke test (operators)
+
+After building the single-user image, run:
+
+```bash
+scripts/smoke-singleuser-image.sh hbpmip/mip-jupyter:<tag>
+```
+
+The script checks Jupyter status, Codex/jupyter-mcp wrappers, shell-bridge config (no native `[mcp_servers]`), `read-guide --page`, and `notebook-outline`.
+
+For vLLM and parse-error acceptance (no UI):
+
+```bash
+scripts/accept-cohort-scout-vllm.sh
+```
+
+After deploying a new image tag, recreate existing single-user pods so they pull the updated image; `imagePullPolicy` alone does not refresh already-running pods.
 
 ## Production Notes
 
