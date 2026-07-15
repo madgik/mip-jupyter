@@ -26,7 +26,7 @@ Catalog help
 
 Useful methods:
 - catalog.summaries()         compact list of data models
-- catalog.tree()              ASCII overview of all models
+- catalog.tree()              collapsible HTML / ASCII overview of all models
 - catalog.data_model("Dementia")  pick one model to explore
 - catalog.list()              all DataModel objects
 
@@ -44,7 +44,7 @@ Useful methods:
 - dm.variables.search("Age")  find variables by name
 - dm.variables.numerical()    numeric variables only
 - dm.variables.categorical()  categorical variables only
-- dm.tree()                   hierarchy view
+- dm.tree()                   collapsible HTML hierarchy (ASCII via str())
 - dm.variables.tree(group="Demographics")
 
 Typical next step:

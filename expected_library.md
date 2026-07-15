@@ -127,10 +127,12 @@ pipeline.help()
 
 Evaluating objects in a notebook cell renders a compact HTML card via `_repr_html_()` for `DataModel`, `Dataset`, `Variable`, `AnalysisSet`, `Pipeline`, and `Result`.
 
+`catalog.tree()`, `dm.tree()`, and `dm.variables.tree()` return a `MetadataTree`: notebooks show a collapsible HTML tree; `str(tree)` keeps the ASCII form for copy/paste and agents.
+
 Tabular previews:
 
 ```python
-dm.variables.to_frame()
+dm.variables.to_frame()  # label, type, group_path, description, n_categories, …
 dm.datasets.to_frame()
 client.algorithms().to_frame()
 mip.to_frame(dm.variables.search("age"))

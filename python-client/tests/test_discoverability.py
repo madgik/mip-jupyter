@@ -50,7 +50,14 @@ class TestDiscoverability(unittest.TestCase):
     def test_variable_collection_to_frame(self):
         frame = self.dm.variables.to_frame()
         self.assertIn("label", frame.columns)
+        self.assertIn("group_path", frame.columns)
         self.assertIn("Age", frame["label"].tolist())
+        age_row = frame.loc[frame["label"] == "Age"].iloc[0]
+        self.assertEqual(age_row["group_path"], "Clinical")
+        mmse_row = frame.loc[frame["label"] == "MMSE"].iloc[0]
+        self.assertEqual(mmse_row["group_path"], "Clinical > Cognitive")
+        sex_row = frame.loc[frame["label"] == "Sex"].iloc[0]
+        self.assertEqual(sex_row["n_categories"], 2)
 
     def test_dataset_collection_to_frame(self):
         frame = self.dm.datasets.to_frame()
@@ -60,6 +67,26 @@ class TestDiscoverability(unittest.TestCase):
     def test_mip_to_frame_on_search_results(self):
         frame = mip.to_frame(self.dm.variables.search("Age"))
         self.assertEqual(frame.iloc[0]["label"], "Age")
+
+    def test_metadata_tree_html_is_collapsible(self):
+        tree = self.dm.tree(include_variables=True)
+        html = tree._repr_html_()
+        self.assertIn("<details", html)
+        self.assertIn("Clinical", html)
+        self.assertIn("MMSE", html)
+        self.assertIn("Age", str(tree))
+        self.assertNotIn("<details", str(tree))
+
+    def test_variable_card_includes_categories_and_group(self):
+        html = self.sex._repr_html_()
+        self.assertIn("Clinical", html)
+        self.assertIn("Male", html)
+        self.assertIn("categorical", html)
+
+    def test_dataset_card_includes_variable_preview(self):
+        html = self.adni._repr_html_()
+        self.assertIn("Age", html)
+        self.assertIn("n_variables", html)
 
     def test_pipeline_available_algorithms(self):
         analysis_set = AnalysisSet(

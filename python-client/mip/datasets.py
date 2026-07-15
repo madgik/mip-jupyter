@@ -27,12 +27,19 @@ class Dataset:
     def _repr_html_(self) -> str:
         from .display import render_object_card
 
+        variables = self.variables()
+        preview = ", ".join(variable.label for variable in variables[:6] if variable.label)
+        if len(variables) > 6:
+            preview += f", … (+{len(variables) - 6})"
+        fields: dict[str, Any] = {
+            "label": self.label,
+            "n_variables": len(variables),
+        }
+        if preview:
+            fields["variables"] = preview
         return render_object_card(
             f"Dataset: {self.label}",
-            {
-                "label": self.label,
-                "n_variables": len(self.variables()),
-            },
+            fields,
             [".summary()", ".details()", ".variables()", ".help()"],
         )
 

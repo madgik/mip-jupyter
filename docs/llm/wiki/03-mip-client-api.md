@@ -20,6 +20,8 @@ dm = client.catalog().data_model("Dementia", version="0.1")  # version optional
 dm.datasets["ADNI"]; dm.variables["Age"]; dm.variables.search("MMSE")
 dm.help(); pipeline.help(); pipeline.recommend_algorithms()
 variable.details(); variable.categories()
+dm.tree()  # collapsible HTML in notebooks; str(...) for ASCII
+dm.variables.to_frame()  # includes group_path / n_categories
 ```
 
 ## Filters and preprocessing

@@ -16,10 +16,11 @@ from .labels import normalize_label
 class Variable:
     """One backend data-model variable."""
 
-    def __init__(self, data: Mapping[str, Any]):
+    def __init__(self, data: Mapping[str, Any], *, group_path: str | None = None):
         self._data = dict(data or {})
         self._code = self._data.get("code")
         self.label = self._data.get("label") or self._code
+        self._group_path = group_path
 
     def __repr__(self) -> str:
         return f"<Variable(label={self.label!r})>"
@@ -27,14 +28,26 @@ class Variable:
     def _repr_html_(self) -> str:
         from .display import render_object_card
 
+        kind = "numerical" if self.is_numerical() else "categorical" if self.is_categorical() else "other"
+        categories = self.categories()
+        fields: dict[str, Any] = {
+            "label": self.label,
+            "type": self._data.get("type"),
+            "kind": kind,
+        }
+        if self._group_path:
+            fields["group"] = self._group_path
+        description = self._description()
+        if description:
+            fields["description"] = description
+        if categories:
+            preview = ", ".join(categories[:8])
+            if len(categories) > 8:
+                preview += f", … (+{len(categories) - 8})"
+            fields["categories"] = preview
         return render_object_card(
             f"Variable: {self.label}",
-            {
-                "label": self.label,
-                "type": self._data.get("type"),
-                "numerical": self.is_numerical(),
-                "categorical": self.is_categorical(),
-            },
+            fields,
             [".summary()", ".details()", ".categories()", ".help()"],
         )
 
@@ -43,14 +56,27 @@ class Variable:
 
         return show_help("Variable")
 
+    def _description(self) -> str | None:
+        text = self._data.get("desc") or self._data.get("description")
+        if text is None:
+            return None
+        cleaned = str(text).strip()
+        return cleaned or None
+
     def details(self) -> dict[str, Any]:
-        return {
+        payload = {
             "label": self.label,
             "type": self._data.get("type"),
             "categorical": self.is_categorical(),
             "numerical": self.is_numerical(),
             "categories": self.categories(),
         }
+        if self._group_path:
+            payload["group_path"] = self._group_path
+        description = self._description()
+        if description:
+            payload["description"] = description
+        return payload
 
     def is_numerical(self) -> bool:
         kind = str(self._data.get("type") or self._data.get("sql_type") or "").lower()
@@ -81,12 +107,19 @@ class Variable:
         return enumeration_code_for_label(raw, value)
 
     def summary(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "label": self.label,
             "type": self._data.get("type"),
             "categorical": self.is_categorical(),
             "numerical": self.is_numerical(),
+            "group_path": self._group_path,
+            "description": self._description(),
         }
+        if self.is_categorical():
+            payload["n_categories"] = len(self.categories())
+        else:
+            payload["n_categories"] = None
+        return payload
 
 
 class VariableCollection:
@@ -99,9 +132,22 @@ class VariableCollection:
         groups: Iterable[Any] | None = None,
         root_variables: Iterable[Mapping[str, Any]] | None = None,
     ):
-        self._items = [item if isinstance(item, Variable) else Variable(item) for item in variables]
-        self._by_code = {item._code: item for item in self._items if item._code is not None}
+        from .metadata_tree import variable_group_paths
+
         self._groups = list(groups or [])
+        paths = variable_group_paths(self._groups)
+        self._items: list[Variable] = []
+        for item in variables:
+            if isinstance(item, Variable):
+                if item._group_path is None and item._code is not None:
+                    item._group_path = paths.get(str(item._code))
+                self._items.append(item)
+            else:
+                code = item.get("code") if isinstance(item, Mapping) else None
+                self._items.append(
+                    Variable(item, group_path=paths.get(str(code)) if code is not None else None)
+                )
+        self._by_code = {item._code: item for item in self._items if item._code is not None}
         self._root_variables = [dict(item) for item in (root_variables or []) if isinstance(item, Mapping)]
 
     def __iter__(self):
@@ -119,7 +165,7 @@ class VariableCollection:
             return self.to_list()
 
         def description(item: Variable) -> str:
-            return str(item._data.get("desc") or item._data.get("description") or "")
+            return str(item._description() or "")
 
         return [
             item
@@ -143,10 +189,11 @@ class VariableCollection:
     def tree(self, *, group: Any | None = None, max_lines: int = 250):
         """Render variables in their backend group hierarchy."""
         from .metadata_tree import MetadataTree
+        from .metadata_tree import PathologyView
         from .metadata_tree import find_group
         from .metadata_tree import list_groups
-        from .metadata_tree import PathologyView
         from .metadata_tree import render_pathology_tree
+        from .metadata_tree import render_pathology_tree_html
 
         focus_group = None
         focus_group_path = None
@@ -182,7 +229,14 @@ class VariableCollection:
                 max_lines=max_lines,
                 focus_group=focus_group,
                 focus_group_path=focus_group_path,
-            )
+            ),
+            html=render_pathology_tree_html(
+                pathology,
+                include_variables=True,
+                max_nodes=max_lines,
+                focus_group=focus_group,
+                focus_group_path=focus_group_path,
+            ),
         )
 
     def to_frame(self):

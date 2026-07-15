@@ -8,6 +8,7 @@ from .labels import normalize_label
 from .labels import public_label
 from .metadata_tree import MetadataTree
 from .metadata_tree import render_catalog_tree
+from .metadata_tree import render_catalog_tree_html
 
 
 class Catalog:
@@ -31,8 +32,12 @@ class Catalog:
         return [model.summary() for model in self.data_models()]
 
     def tree(self, *, max_lines: int = 250) -> MetadataTree:
-        """Render an ASCII tree of all authorized data models."""
-        return MetadataTree(render_catalog_tree(self.data_models(), max_lines=max_lines))
+        """Render an ASCII/HTML tree of all authorized data models."""
+        models = self.data_models()
+        return MetadataTree(
+            render_catalog_tree(models, max_lines=max_lines),
+            html=render_catalog_tree_html(models, max_nodes=max_lines),
+        )
 
     def data_model(self, label: str, version: str | None = None) -> DataModel:
         needle = normalize_label(label)

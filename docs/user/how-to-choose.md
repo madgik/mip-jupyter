@@ -10,7 +10,7 @@ Selection and display use **human-readable labels** only (for example `"Age"`, `
 |-----------|-----|
 | See available data models | `catalog.summaries()` or `catalog.tree()` |
 | Pick a data model | `catalog.data_model("Dementia")` |
-| Understand a data model | `dm.summary()` then `dm.tree()` |
+| Understand a data model | `dm.summary()` then `dm.tree()` (collapsible HTML in notebooks) |
 | Find a variable | `dm.variables.search("age")` |
 | See only numeric variables | `dm.variables.numerical()` |
 | See only categorical variables | `dm.variables.categorical()` |
@@ -18,7 +18,7 @@ Selection and display use **human-readable labels** only (for example `"Age"`, `
 | Understand a variable | `variable.summary()` then `variable.details()` |
 | See allowed categories | `variable.categories()` |
 | Check datasets | `dm.datasets.list()` or `dm.datasets.search("ADNI")` |
-| Tabular preview of variables | `dm.variables.to_frame()` |
+| Tabular preview of variables | `dm.variables.to_frame()` (includes `group_path`) |
 | Tabular preview of datasets | `dm.datasets.to_frame()` |
 | Find algorithms | `client.algorithms().search("logistic")` |
 | Tabular preview of algorithms | `client.algorithms().to_frame()` |

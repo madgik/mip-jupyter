@@ -27,14 +27,15 @@ Every notebook object exposes `.help()` — for example `dm.help()` or `pipeline
 
 ```python
 dm.help()
-dm.variables.to_frame()
+dm.variables.to_frame()  # includes group_path, description, n_categories
 dm.datasets.to_frame()
 mip.to_frame(dm.variables.search("age"))
 pipeline.recommend_algorithms()
 pipeline.available_algorithms()
+dm.tree()  # collapsible HTML; str(dm.tree()) for ASCII
 ```
 
-Evaluating `DataModel`, `Dataset`, `Variable`, `AnalysisSet`, `Pipeline`, or `Result` in a cell shows a compact HTML summary card.
+Evaluating `DataModel`, `Dataset`, `Variable`, `AnalysisSet`, `Pipeline`, or `Result` in a cell shows a compact HTML summary card. `dm.tree()` / `catalog.tree()` render collapsible HTML in notebooks.
 
 ## Filters
 

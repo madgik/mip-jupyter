@@ -1,4 +1,4 @@
-"""ASCII metadata tree rendering for catalog discovery in notebooks."""
+"""ASCII and HTML metadata tree rendering for catalog discovery in notebooks."""
 
 from __future__ import annotations
 
@@ -8,22 +8,25 @@ from typing import Iterable
 from typing import Mapping
 
 from .datamodel import DataModel
+from .display import escape_html
 
 
 class MetadataTree(str):
-    """String wrapper with notebook-friendly repr and display."""
+    """ASCII tree text with optional collapsible HTML for notebooks."""
+
+    def __new__(cls, text: str, *, html: str | None = None):
+        instance = super().__new__(cls, text)
+        instance._html = html
+        return instance
 
     def __repr__(self) -> str:
         return str(self)
 
     def _repr_html_(self) -> str:
-        escaped = (
-            str(self)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
-        return f"<pre>{escaped}</pre>"
+        if self._html:
+            return self._html
+        escaped = escape_html(str(self))
+        return f"<pre style=\"white-space:pre-wrap\">{escaped}</pre>"
 
     def display(self) -> None:
         try:
@@ -67,6 +70,27 @@ def pathology_from_data_model(model: DataModel) -> PathologyView:
     )
 
 
+def variable_group_paths(groups: Iterable[Any]) -> dict[str, str]:
+    """Map variable codes to label-only group paths (e.g. Clinical > Cognitive)."""
+    paths: dict[str, str] = {}
+
+    def visit(group: Any, path: list[str]) -> None:
+        label = str(_item_get(group, "label") or "").strip() or "<unknown>"
+        current = path + [label]
+        path_text = " > ".join(current)
+        for variable in _as_list(_item_get(group, "variables", default=[])):
+            code = _item_get(variable, "code")
+            if code is None or code in paths:
+                continue
+            paths[str(code)] = path_text
+        for child in _as_list(_item_get(group, "groups", default=[])):
+            visit(child, current)
+
+    for group in _as_list(groups):
+        visit(group, [])
+    return paths
+
+
 def render_catalog_tree(models: list[DataModel], *, max_lines: int = 250) -> str:
     writer = _LineWriter(max_lines=max_lines)
     writer.add(f"Data models ({len(models)})")
@@ -91,6 +115,39 @@ def render_catalog_tree(models: list[DataModel], *, max_lines: int = 250) -> str
             f"{connector} {model.label or model.name} [{', '.join(summary)}]"
         )
     return writer.render()
+
+
+def render_catalog_tree_html(models: list[DataModel], *, max_nodes: int = 250) -> str:
+    counter = _NodeCounter(max_nodes=max_nodes)
+    ordered = sorted(
+        [pathology_from_data_model(model) for model in models],
+        key=lambda model: (str(model.label or "").lower(), str(model.version or "").lower()),
+    )
+    items = []
+    for model in ordered:
+        if not counter.consume():
+            break
+        groups_count = _count_group_nodes(model.groups)
+        grouped_variables_count = _count_group_variables(model.groups)
+        summary = (
+            f"{len(model.datasets)} datasets · {len(model.variables)} root vars · "
+            f"{groups_count} groups · {grouped_variables_count} grouped vars"
+        )
+        label = escape_html(model.label or model.name or "<unknown>")
+        version = f" ({escape_html(model.version)})" if model.version else ""
+        items.append(
+            f"<li><strong>{label}{version}</strong>"
+            f"<div style=\"color:#666;font-size:12px\">{escape_html(summary)}</div></li>"
+        )
+    truncated = (
+        '<li style="color:#666">… (truncated)</li>' if counter.truncated else ""
+    )
+    return (
+        '<div style="font-family:system-ui,sans-serif;font-size:13px;line-height:1.45">'
+        f"<p><strong>Data models ({len(models)})</strong></p>"
+        f"<ul style=\"margin:0;padding-left:1.2em\">{''.join(items)}{truncated}</ul>"
+        "</div>"
+    )
 
 
 def render_pathology_tree(
@@ -170,6 +227,99 @@ def render_pathology_tree(
     return writer.render()
 
 
+def render_pathology_tree_html(
+    pathology: PathologyView,
+    *,
+    include_variables: bool = False,
+    max_nodes: int = 250,
+    focus_group: Any | None = None,
+    focus_group_path: list[str] | None = None,
+) -> str:
+    counter = _NodeCounter(max_nodes=max_nodes)
+    if focus_group is not None:
+        display_name = pathology.label or "<unknown>"
+        if pathology.version:
+            display_name = f"{display_name} ({pathology.version})"
+        path_parts = [str(part) for part in (focus_group_path or []) if part]
+        if not path_parts:
+            path_parts = [_format_name_label(_item_get(focus_group, "code"), _item_get(focus_group, "label"))]
+        title = f"{display_name} › {' › '.join(path_parts)}"
+        body = _render_group_html(
+            group=focus_group,
+            include_variables=include_variables,
+            counter=counter,
+            open_root=True,
+        )
+        return _wrap_tree_html(title, body, truncated=counter.truncated)
+
+    title = f"Metadata tree for {pathology.label or pathology.name or '<unknown>'}"
+    if pathology.version:
+        title += f" ({pathology.version})"
+
+    sections: list[str] = []
+    if pathology.longitudinal is not None and counter.consume():
+        sections.append(f"<div>longitudinal: <code>{escape_html(bool(pathology.longitudinal))}</code></div>")
+
+    datasets = _as_list(pathology.datasets)
+    if counter.consume():
+        dataset_items = []
+        for dataset in datasets:
+            if not counter.consume():
+                break
+            dataset_items.append(f"<li>{escape_html(_format_dataset(dataset))}</li>")
+        sections.append(
+            _details_block(
+                f"datasets ({len(datasets)})",
+                f"<ul style=\"margin:0.25em 0;padding-left:1.2em\">{''.join(dataset_items)}</ul>",
+                open_by_default=True,
+            )
+        )
+
+    groups = _as_list(pathology.groups)
+    if counter.consume():
+        group_html = "".join(
+            _render_group_html(
+                group=group,
+                include_variables=include_variables,
+                counter=counter,
+                open_root=False,
+            )
+            for group in groups
+            if not counter.truncated
+        )
+        sections.append(
+            _details_block(
+                f"groups ({len(groups)})",
+                group_html or "<div style=\"color:#666\">(none)</div>",
+                open_by_default=True,
+            )
+        )
+
+    variables = _as_list(pathology.variables)
+    if counter.consume():
+        if include_variables:
+            variable_html = "".join(
+                _variable_html(variable)
+                for variable in variables
+                if counter.consume()
+            )
+        else:
+            variable_html = (
+                '<div style="color:#666;font-size:12px">'
+                "Use include_variables=True or dm.variables.tree(group=...) to list variables."
+                "</div>"
+            )
+        sections.append(
+            _details_block(
+                f"root_variables ({len(variables)})",
+                variable_html,
+                open_by_default=include_variables,
+            )
+        )
+
+    return _wrap_tree_html(title, "".join(sections), truncated=counter.truncated)
+
+
 def render_group_subtree(
     group: Any,
     *,
@@ -204,7 +354,6 @@ def find_group(groups: Iterable[Any], selector: Any) -> tuple[Any, list[str]] | 
         return None
 
     def visit(group: Any, path: list[str]) -> tuple[Any, list[str]] | None:
-        code = str(_item_get(group, "code") or "").strip()
         label = str(_item_get(group, "label") or "").strip()
         current_path = path + [label or "<unknown>"]
         if _matches_group_selector(group, needle):
@@ -270,6 +419,96 @@ class _LineWriter:
             else:
                 self.lines.append("... (truncated)")
         return "\n".join(self.lines)
+
+
+class _NodeCounter:
+    def __init__(self, max_nodes: int):
+        self.max_nodes = max(1, int(max_nodes))
+        self.count = 0
+        self.truncated = False
+
+    def consume(self) -> bool:
+        if self.count >= self.max_nodes:
+            self.truncated = True
+            return False
+        self.count += 1
+        return True
+
+
+def _wrap_tree_html(title: str, body: str, *, truncated: bool) -> str:
+    note = (
+        '<div style="color:#666;margin-top:0.5em;font-size:12px">… (truncated)</div>'
+        if truncated
+        else ""
+    )
+    return (
+        '<div style="font-family:system-ui,sans-serif;font-size:13px;line-height:1.45">'
+        f"<p><strong>{escape_html(title)}</strong></p>"
+        f"{body}{note}"
+        "</div>"
+    )
+
+
+def _details_block(summary: str, body: str, *, open_by_default: bool) -> str:
+    open_attr = " open" if open_by_default else ""
+    return (
+        f"<details{open_attr} style=\"margin:0.2em 0\">"
+        f"<summary style=\"cursor:pointer\">{escape_html(summary)}</summary>"
+        f"<div style=\"margin-left:0.9em;margin-top:0.25em\">{body}</div>"
+        "</details>"
+    )
+
+
+def _render_group_html(
+    *,
+    group: Any,
+    include_variables: bool,
+    counter: _NodeCounter,
+    open_root: bool,
+) -> str:
+    if not counter.consume():
+        return ""
+    variables = _as_list(_item_get(group, "variables", default=[]))
+    subgroups = _as_list(_item_get(group, "groups", default=[]))
+    node_name = _format_name_label(_item_get(group, "code"), _item_get(group, "label"))
+    summary_parts = [f"{len(variables)} vars"]
+    if subgroups:
+        summary_parts.append(f"{len(subgroups)} groups")
+    summary = f"{node_name} [{', '.join(summary_parts)}]"
+
+    children: list[str] = []
+    if include_variables:
+        for variable in variables:
+            if not counter.consume():
+                break
+            children.append(_variable_html(variable))
+    for subgroup in subgroups:
+        if counter.truncated:
+            break
+        children.append(
+            _render_group_html(
+                group=subgroup,
+                include_variables=include_variables,
+                counter=counter,
+                open_root=False,
+            )
+        )
+    return _details_block(
+        summary,
+        "".join(children) or "<div style=\"color:#666\">(empty)</div>",
+        open_by_default=open_root,
+    )
+
+
+def _variable_html(variable: Any) -> str:
+    label = escape_html(_format_name_label(_item_get(variable, "code"), _item_get(variable, "label")))
+    variable_type = _item_get(variable, "type")
+    type_html = (
+        f' <span style="color:#666;font-size:12px">[{escape_html(variable_type)}]</span>'
+        if variable_type
+        else ""
+    )
+    return f"<div style=\"padding:0.1em 0\">{label}{type_html}</div>"
 
 
 def _render_group(

@@ -102,6 +102,7 @@ class DataModel:
         from .metadata_tree import list_groups
         from .metadata_tree import pathology_from_data_model
         from .metadata_tree import render_pathology_tree
+        from .metadata_tree import render_pathology_tree_html
 
         focus_group = None
         focus_group_path = None
@@ -128,7 +129,14 @@ class DataModel:
                 max_lines=max_lines,
                 focus_group=focus_group,
                 focus_group_path=focus_group_path,
-            )
+            ),
+            html=render_pathology_tree_html(
+                pathology,
+                include_variables=include_variables,
+                max_nodes=max_lines,
+                focus_group=focus_group,
+                focus_group_path=focus_group_path,
+            ),
         )
 
 
