@@ -128,6 +128,8 @@ class TestDiscoverability(unittest.TestCase):
         html = self.catalog._repr_html_()
         self.assertIn("Catalog", html)
         self.assertIn("Dementia", html)
+        self.assertIn("<table", html)
+        self.assertIn("n_variables", html)
 
     def test_result_help_and_repr_html(self):
         result = Result(raw={"bins": [1, 2], "counts": [3, 4]}, result_type="histogram")

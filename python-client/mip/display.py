@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 from typing import Iterable
 from typing import Mapping
@@ -27,6 +28,7 @@ Catalog help
 Useful methods:
 - catalog.summaries()         compact list of data models
 - catalog.tree()              collapsible HTML / ASCII overview of all models
+- catalog.browse()            interactive picker (requires ipywidgets)
 - catalog.data_model("Dementia")  pick one model to explore
 - catalog.list()              all DataModel objects
 
@@ -46,6 +48,7 @@ Useful methods:
 - dm.variables.categorical()  categorical variables only
 - dm.tree()                   collapsible HTML hierarchy (ASCII via str())
 - dm.select(datasets=[...], variables=[...])  build an AnalysisSet
+- dm.browse()                 interactive picker (requires ipywidgets)
 - dm.variables.tree(group="Demographics")
 
 Typical next step:
@@ -134,17 +137,19 @@ Useful methods:
 - result.summary()    backend result payload (same as .raw)
 - result.raw          raw result dict or value
 - result.payload      full experiment response
-- result.plot()       matplotlib chart (histogram results)
+- result.plot()       matplotlib chart (histogram, describe, t-test, chi-square,
+                      pearson, logistic odds-ratio forest, …)
 
 Typical next step:
   result.to_frame()
-  result.plot()  # histogram only""",
+  result.plot()""",
     "ModelResult": """\
 ModelResult help
 
 Useful methods:
 - result.highlights()     key metrics (N, coefficient count, …)
-- result.to_frame()       coefficient table with p-values / CIs when present
+- result.to_frame()       coefficient table with odds ratios / p-values / CIs
+- result.plot()           odds-ratio forest plot
 - result.summary()        backend result payload
 - result.raw              raw result dict
 - result.payload          full experiment response
@@ -152,7 +157,8 @@ Useful methods:
 - result.to_sklearn()     export as sklearn classifier (logistic only)
 
 Typical next step:
-  result.to_frame()""",
+  result.to_frame()
+  result.plot()""",
     "AlgorithmRegistry": """\
 AlgorithmRegistry help
 
@@ -409,7 +415,23 @@ def result_table_rows(result_type: str | None, raw: Any) -> list[dict[str, Any]]
     if kind in {"logistic_regression", "logistic_regression_cv"}:
         return _logistic_rows(payload)
     if kind in {"t_test", "one_sample_t_test", "paired_t_test", "mann_whitney_u_test"}:
-        return [_pick_fields(payload, ("t_stat", "p", "mean_diff", "cohens_d", "n_obs", "df"))]
+        return [
+            _pick_fields(
+                payload,
+                (
+                    "t_stat",
+                    "u_stat",
+                    "p",
+                    "p_value",
+                    "mean_diff",
+                    "ci_lower",
+                    "ci_upper",
+                    "cohens_d",
+                    "n_obs",
+                    "df",
+                ),
+            )
+        ]
     if kind in {"chi_square_test", "fisher_exact"}:
         return [_pick_fields(payload, ("chi2", "odds_ratio", "p_value", "dof", "n_obs"))]
     if kind == "pearson_correlation":
@@ -503,25 +525,46 @@ def _logistic_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else payload
     if not isinstance(summary, Mapping):
         return []
-    names = summary.get("feature_names") or payload.get("feature_names") or []
+    names = (
+        summary.get("feature_names")
+        or payload.get("feature_names")
+        or payload.get("indep_vars")
+        or []
+    )
     coefficients = summary.get("coefficients") or payload.get("coefficients") or []
-    if not isinstance(names, list) or not isinstance(coefficients, list):
+    if not isinstance(names, list) or not isinstance(coefficients, list) or not names:
         return []
     pvalues = summary.get("pvalues") or summary.get("p_values") or []
     lower = summary.get("lower_ci") or summary.get("conf_int_lower") or []
     upper = summary.get("upper_ci") or summary.get("conf_int_upper") or []
     rows: list[dict[str, Any]] = []
     for index, name in enumerate(names):
+        coef = coefficients[index] if index < len(coefficients) else None
         row: dict[str, Any] = {
             "feature": name,
-            "coefficient": _fmt_number(coefficients[index] if index < len(coefficients) else None),
+            "coefficient": _fmt_number(coef),
         }
+        if coef is not None:
+            try:
+                row["odds_ratio"] = _fmt_number(math.exp(float(coef)))
+            except (TypeError, ValueError, OverflowError):
+                pass
         if isinstance(pvalues, list) and index < len(pvalues):
             row["p"] = _fmt_number(pvalues[index])
         if isinstance(lower, list) and index < len(lower):
-            row["lower_ci"] = _fmt_number(lower[index])
+            low = lower[index]
+            row["lower_ci"] = _fmt_number(low)
+            try:
+                row["or_lower_ci"] = _fmt_number(math.exp(float(low)))
+            except (TypeError, ValueError, OverflowError):
+                pass
         if isinstance(upper, list) and index < len(upper):
-            row["upper_ci"] = _fmt_number(upper[index])
+            high = upper[index]
+            row["upper_ci"] = _fmt_number(high)
+            try:
+                row["or_upper_ci"] = _fmt_number(math.exp(float(high)))
+            except (TypeError, ValueError, OverflowError):
+                pass
         rows.append(row)
     return rows
 

@@ -59,8 +59,9 @@ No `Pipeline.run()`. `new_columns` takes creators. Registries:
 
 ```python
 result.highlights(); result.to_frame(); result.summary(); result.raw; result.payload
-# histogram: result.plot()
+# plots: result.plot() for histogram/describe/tests/pearson/logistic
 # logistic only: result.to_sklearn(), result.feature_schema()
+# optional UI: catalog.browse() / dm.browse() (ipywidgets)
 ```
 
 Common `summary()` keys: describe → `featurewise[].data.*`; histogram →

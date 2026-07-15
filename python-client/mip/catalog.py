@@ -76,21 +76,39 @@ class Catalog:
         return show_help("Catalog")
 
     def _repr_html_(self) -> str:
+        from .display import escape_html
         from .display import render_object_card
 
         summaries = self.summaries()
-        labels = ", ".join(
-            str(item.get("label") or "")
-            for item in summaries[:8]
-            if item.get("label")
-        )
-        if len(summaries) > 8:
-            labels += f", … (+{len(summaries) - 8})"
         fields = {"data_models": len(summaries)}
-        if labels:
-            fields["labels"] = labels
-        return render_object_card(
+        card = render_object_card(
             "Catalog",
             fields,
-            [".summaries()", ".tree()", '.data_model("Dementia")', ".help()"],
+            [".summaries()", ".tree()", ".browse()", '.data_model("Dementia")', ".help()"],
         )
+        if not summaries:
+            return card
+        header = "".join(f"<th>{escape_html(key)}</th>" for key in ("label", "version", "n_datasets", "n_variables"))
+        body = []
+        for item in summaries[:25]:
+            cells = "".join(
+                f"<td>{escape_html(item.get(key, ''))}</td>"
+                for key in ("label", "version", "n_datasets", "n_variables")
+            )
+            body.append(f"<tr>{cells}</tr>")
+        note = (
+            f'<div style="color:#666;font-size:12px">Showing {min(25, len(summaries))} of {len(summaries)}</div>'
+            if len(summaries) > 25
+            else ""
+        )
+        table = (
+            '<table style="border-collapse:collapse;font-family:monospace;font-size:12px;margin-top:0.5em">'
+            f"<thead><tr>{header}</tr></thead><tbody>{''.join(body)}</tbody></table>{note}"
+        )
+        return f"{card}{table}"
+
+    def browse(self, *, max_variable_options: int = 200):
+        """Interactive catalog browser (requires ipywidgets)."""
+        from .widgets import browse_catalog
+
+        return browse_catalog(self, max_variable_options=max_variable_options)

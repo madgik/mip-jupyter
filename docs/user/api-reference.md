@@ -77,8 +77,15 @@ result.to_frame()
 result.summary()
 result.raw
 result.payload
-result.plot()  # histogram only
+result.plot()  # histogram, describe, tests, pearson, logistic OR forest, …
 logreg.to_sklearn()  # logistic regression only
+```
+
+Interactive catalog browse (optional `ipywidgets`):
+
+```python
+catalog.browse()
+dm.browse()
 ```
 
 ## Registries

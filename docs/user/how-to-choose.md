@@ -27,7 +27,8 @@ Selection and display use **human-readable labels** only (for example `"Age"`, `
 | Preview the full request | `pipeline.explain()` |
 | Get algorithm suggestions | `pipeline.recommend_algorithms()` |
 | Understand results | `result.highlights()`, `result.to_frame()`, `result.summary()` |
-| Plot a histogram | `result.plot()` |
+| Plot results | `result.plot()` (histogram, describe, t-test, chi-square, pearson, logistic, …) |
+| Interactive browse | `catalog.browse()` / `dm.browse()` (requires ipywidgets) |
 
 ## Typical exploration flow
 

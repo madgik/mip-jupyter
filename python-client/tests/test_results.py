@@ -17,7 +17,7 @@ class TestResults(unittest.TestCase):
 
     def test_plot_raises_for_non_plot_result(self):
         with self.assertRaises(UnsupportedOperationError):
-            Result(raw={}, result_type="describe").plot()
+            Result(raw={}, result_type="kmeans").plot()
 
     def test_histogram_data_reads_list_payload(self):
         data = _histogram_data({"histogram": [{"var": "age", "bins": [1, 2, 3], "counts": [4, 5]}]})
@@ -59,13 +59,14 @@ class TestResults(unittest.TestCase):
 
     def test_t_test_highlights(self):
         result = Result(
-            raw={"t_stat": 2.1, "p": 0.04, "mean_diff": 1.5, "cohens_d": 0.3},
+            raw={"t_stat": 2.1, "p": 0.04, "mean_diff": 1.5, "cohens_d": 0.3, "ci_lower": 0.2, "ci_upper": 2.8},
             result_type="t_test",
         )
         highlights = result.highlights()
         self.assertEqual(highlights["p"], 0.04)
         frame = result.to_frame()
         self.assertEqual(frame.iloc[0]["t_stat"], 2.1)
+        self.assertEqual(frame.iloc[0]["ci_lower"], 0.2)
 
     def test_chi_square_to_frame(self):
         result = Result(raw={"chi2": 9.2, "p_value": 0.002, "dof": 2}, result_type="chi_square_test")
@@ -91,9 +92,11 @@ class TestResults(unittest.TestCase):
         frame = result.to_frame()
         self.assertEqual(frame["feature"].tolist(), ["Intercept", "Age", "Sex"])
         self.assertEqual(frame.iloc[1]["p"], 0.01)
+        self.assertIn("odds_ratio", frame.columns)
         html = result._repr_html_()
         self.assertIn("Age", html)
         self.assertIn(".to_sklearn()", html)
+        self.assertIn(".plot()", html)
 
     def test_to_frame_raises_when_unsupported(self):
         with self.assertRaises(UnsupportedOperationError):
@@ -114,6 +117,53 @@ class TestResults(unittest.TestCase):
         axis.set_xlabel.assert_called_with("MMSE")
         axis.set_title.assert_called_with("Histogram: MMSE")
         figure.tight_layout.assert_called_once()
+
+    def test_plot_logistic_forest(self):
+        result = ModelResult(
+            raw={
+                "indep_vars": ["Intercept", "Age"],
+                "summary": {
+                    "coefficients": [0.0, 0.693147],
+                    "lower_ci": [-0.1, 0.2],
+                    "upper_ci": [0.1, 1.2],
+                    "pvalues": [1.0, 0.01],
+                },
+            },
+            result_type="logistic_regression",
+        )
+        axis = MagicMock()
+        figure = MagicMock()
+        with patch("matplotlib.pyplot.subplots", return_value=(figure, axis)):
+            returned = result.plot()
+        self.assertIs(returned, axis)
+        axis.errorbar.assert_called_once()
+        axis.set_xscale.assert_called_with("log")
+
+    def test_plot_describe_means(self):
+        result = Result(
+            raw={
+                "featurewise": [
+                    {"variable": "Age", "dataset": "ADNI", "data": {"mean": 70.0}},
+                    {"variable": "MMSE", "dataset": "ADNI", "data": {"mean": 24.0}},
+                ]
+            },
+            result_type="describe",
+        )
+        axis = MagicMock()
+        figure = MagicMock()
+        with patch("matplotlib.pyplot.subplots", return_value=(figure, axis)):
+            returned = result.plot()
+        self.assertIs(returned, axis)
+        axis.barh.assert_called_once()
+
+    def test_plot_chi_square(self):
+        result = Result(raw={"chi2": 4.5, "p_value": 0.03, "dof": 1}, result_type="chi_square_test")
+        axis = MagicMock()
+        figure = MagicMock()
+        with patch("matplotlib.pyplot.subplots", return_value=(figure, axis)):
+            returned = result.plot()
+        self.assertIs(returned, axis)
+        axis.bar.assert_called_once()
 
 
 if __name__ == "__main__":

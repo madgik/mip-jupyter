@@ -347,11 +347,15 @@ available. Common helpers:
 ```python
 result.highlights()
 result.to_frame()
-result.plot()  # histogram only
+result.plot()  # histogram, describe, t-test, chi-square, pearson, logistic, …
 ```
 
-Histogram results may support `.plot()`. Unsupported plotting or tabular previews
-raise `UnsupportedOperationError`.
+`catalog.browse()` / `dm.browse()` provide an optional ipywidgets picker (install
+the notebook extra). A full JupyterLab side-panel extension is not shipped; the
+widget browser covers interactive selection in notebooks.
+
+Histogram and other supported results may use `.plot()`. Unsupported plotting or
+tabular previews raise `UnsupportedOperationError`.
 
 Logistic regression results expose:
 

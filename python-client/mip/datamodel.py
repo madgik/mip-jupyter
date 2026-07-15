@@ -53,6 +53,7 @@ class DataModel:
             [
                 ".summary()",
                 ".select(datasets=[...], variables=[...])",
+                ".browse()",
                 ".datasets.list()",
                 ".variables.search(\"Age\")",
                 ".tree()",
@@ -64,6 +65,12 @@ class DataModel:
         from .display import show_help
 
         return show_help("DataModel")
+
+    def browse(self, *, max_variable_options: int = 200):
+        """Interactive dataset/variable picker (requires ipywidgets)."""
+        from .widgets import browse_analysis_set
+
+        return browse_analysis_set(self, max_variable_options=max_variable_options)
 
     def select(
         self,
