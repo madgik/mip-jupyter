@@ -156,13 +156,34 @@ class TestResults(unittest.TestCase):
         self.assertIs(returned, axis)
         axis.barh.assert_called_once()
 
-    def test_plot_chi_square(self):
-        result = Result(raw={"chi2": 4.5, "p_value": 0.03, "dof": 1}, result_type="chi_square_test")
+    def test_histogram_highlights_tolerate_null_counts(self):
+        result = Result(
+            raw={"bins": ["ACS", "PCS", "other"], "counts": [10, None, 2]},
+            result_type="histogram",
+        )
+        self.assertEqual(result.highlights()["total_count"], 12.0)
         axis = MagicMock()
         figure = MagicMock()
         with patch("matplotlib.pyplot.subplots", return_value=(figure, axis)):
-            returned = result.plot()
-        self.assertIs(returned, axis)
+            result.plot()
+        axis.bar.assert_called_once()
+        plotted_counts = axis.bar.call_args[0][1]
+        self.assertEqual(list(plotted_counts), [10.0, 0.0, 2.0])
+
+    def test_backend_result_types_map_to_frames(self):
+        t_result = Result(
+            raw={"t_stat": 2.1, "p": 0.04, "mean_diff": 1.5, "ci_lower": 0.2, "ci_upper": 2.8},
+            result_type="ttest_independent",
+        )
+        self.assertEqual(t_result.to_frame().iloc[0]["t_stat"], 2.1)
+        self.assertIn(".plot()", t_result._repr_html_())
+
+        chi = Result(raw={"chi2": 9.2, "p_value": 0.002, "dof": 2}, result_type="chi_squared")
+        self.assertEqual(chi.to_frame().iloc[0]["chi2"], 9.2)
+        axis = MagicMock()
+        figure = MagicMock()
+        with patch("matplotlib.pyplot.subplots", return_value=(figure, axis)):
+            chi.plot()
         axis.bar.assert_called_once()
 
 

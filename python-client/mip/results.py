@@ -6,16 +6,18 @@ from typing import Any
 
 from .display import HelpText
 from .display import histogram_bins_counts
+from .display import normalize_result_kind
 from .display import render_result_card
 from .display import result_highlights
 from .display import result_table_rows
+from .display import safe_numeric_list
 from .display import show_help
 from .display import to_frame
 from .exceptions import UnsupportedOperationError
 from .sklearn import feature_schema_from_logistic_result
 from .sklearn import logistic_regression_to_sklearn
 
-_PLOTTABLE_TYPES = frozenset(
+_PLOTTABLE_KINDS = frozenset(
     {
         "histogram",
         "describe",
@@ -61,7 +63,7 @@ class Result:
 
     def _repr_html_(self) -> str:
         methods = [".highlights()", ".to_frame()", ".summary()", ".raw", ".payload", ".help()"]
-        if self.result_type in _PLOTTABLE_TYPES:
+        if normalize_result_kind(self.result_type) in _PLOTTABLE_KINDS:
             methods.insert(2, ".plot()")
         return render_result_card(result_type=self.result_type, raw=self.raw, methods=methods)
 
@@ -75,7 +77,7 @@ class Result:
         except Exception as exc:
             raise UnsupportedOperationError("Plotting requires matplotlib to be installed.") from exc
 
-        kind = str(self.result_type or "").strip().lower()
+        kind = normalize_result_kind(self.result_type)
         if kind == "histogram":
             return _plot_histogram(plt, self.raw)
         if kind == "describe":
@@ -164,6 +166,7 @@ def _plot_histogram(plt, raw: Any):
     if data is None:
         raise UnsupportedOperationError("This histogram result does not contain plottable bins/counts data.")
     bins, counts = data
+    counts = safe_numeric_list(counts)
     variable = _histogram_variable(raw)
     figure, axis = plt.subplots()
     axis.bar(range(len(counts)), counts, tick_label=[str(item) for item in bins])

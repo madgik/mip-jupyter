@@ -8,7 +8,20 @@ from typing import Iterable
 from typing import Mapping
 from typing import Sequence
 
+from .catalog_registry import PIPELINE_BACKEND_ALGORITHMS
 from .labels import public_label
+
+_BACKEND_TO_METHOD = {backend: method for method, backend in PIPELINE_BACKEND_ALGORITHMS.items()}
+
+
+def normalize_result_kind(result_type: str | None) -> str:
+    """Map backend algorithm names to public Pipeline method names when needed."""
+    kind = str(result_type or "").strip().lower()
+    if not kind:
+        return ""
+    if kind in PIPELINE_BACKEND_ALGORITHMS:
+        return kind
+    return _BACKEND_TO_METHOD.get(kind, kind)
 
 HELP_TEXT: dict[str, str] = {
     "Client": """\
@@ -355,7 +368,7 @@ _RESULT_TABLE_PREVIEW_ROWS = 12
 def result_highlights(result_type: str | None, raw: Any) -> dict[str, Any]:
     """Pick a compact set of key metrics for notebook Result cards."""
     payload = raw if isinstance(raw, dict) else {}
-    kind = str(result_type or "").strip().lower()
+    kind = normalize_result_kind(result_type)
 
     if kind == "describe":
         rows = payload.get("featurewise") or []
@@ -366,7 +379,7 @@ def result_highlights(result_type: str | None, raw: Any) -> dict[str, Any]:
 
     if kind == "histogram":
         bins, counts = histogram_bins_counts(payload)
-        total = sum(float(value) for value in counts) if counts else None
+        total = safe_sum(counts)
         return {
             "bins": len(bins) if bins else 0,
             "total_count": _fmt_number(total),
@@ -406,7 +419,7 @@ def result_highlights(result_type: str | None, raw: Any) -> dict[str, Any]:
 def result_table_rows(result_type: str | None, raw: Any) -> list[dict[str, Any]]:
     """Normalize common algorithm payloads into tabular row dicts."""
     payload = raw if isinstance(raw, dict) else {}
-    kind = str(result_type or "").strip().lower()
+    kind = normalize_result_kind(result_type)
 
     if kind == "describe":
         return _describe_rows(payload)
@@ -429,6 +442,9 @@ def result_table_rows(result_type: str | None, raw: Any) -> list[dict[str, Any]]
                     "cohens_d",
                     "n_obs",
                     "df",
+                    "n1",
+                    "n2",
+                    "z_score",
                 ),
             )
         ]
@@ -476,6 +492,33 @@ def _fmt_number(value: Any) -> Any:
             return f"{value:.4g}"
         return round(value, 6)
     return value
+
+
+def safe_sum(values: Sequence[Any]) -> float | None:
+    total = 0.0
+    seen = False
+    for value in values or []:
+        if value is None:
+            continue
+        try:
+            total += float(value)
+        except (TypeError, ValueError):
+            continue
+        seen = True
+    return total if seen else None
+
+
+def safe_numeric_list(values: Sequence[Any]) -> list[float]:
+    cleaned: list[float] = []
+    for value in values or []:
+        if value is None:
+            cleaned.append(0.0)
+            continue
+        try:
+            cleaned.append(float(value))
+        except (TypeError, ValueError):
+            cleaned.append(0.0)
+    return cleaned
 
 
 def _describe_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
