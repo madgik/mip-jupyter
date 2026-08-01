@@ -31,6 +31,25 @@ giant `python -c`; `--content-file -`; paths outside the workspace; `cat` on
 On **tool-call formatting errors**: new chat, `scratch-list`, resume existing
 `scratch/*.py` with smaller steps.
 
+## Direct notebook vs scratch first
+
+| Choose | When |
+|--------|------|
+| **Direct notebook** | Markdown only, one small code cell, outline/read, rename/create empty notebook, fix one cell |
+| **Scratch first** | Multi-step MIP client work, federated algorithms, anything that needs `python …` validation before user-facing cells |
+| **Always after scratch** | Successful `python scratch/<name>.py` → `scratch-to-notebook` → `open-file` / `notebook-outline` (do not stop at `.py` alone unless the user asked for a script only) |
+
+## Verify before transfer
+
+After editing a scratch script, run it from the workspace root:
+
+```bash
+python scratch/<name>.py
+```
+
+Exit 0 before `scratch-to-notebook`. Prefer this over `python -c` / heredocs.
+`# %%` markers split into multiple cells when present; unmarked scripts transfer as one code cell.
+
 ## Common commands
 
 ```bash
@@ -42,13 +61,11 @@ jupyter-mcp notebook-outline PATH
 jupyter-mcp read-cell PATH INDEX --max-chars 3000
 
 # scratch
-jupyter-mcp scratch-init
 jupyter-mcp scratch-list
 jupyter-mcp scratch-copy-template scratch/my.py --source examples/algorithm_examples.py
 jupyter-mcp scratch-append-lines scratch/my.py "# comment"
 jupyter-mcp scratch-replace-snippet scratch/my.py "OLD" "NEW"
 jupyter-mcp scratch-to-notebook scratch/my.py scratch/my.ipynb --title "My analysis"
-jupyter-mcp scratch-log-bottleneck STEP STATUS BLOCKER "note"
 
 # notebook
 jupyter-mcp create-notebook scratch/x.ipynb
@@ -64,14 +81,13 @@ jupyter-mcp mip-search-variables stroke "NIHSS" --version 3.7 --limit 10
 jupyter-mcp mip-algorithm-summary --limit 20
 ```
 
-Exploration / bottlenecks: `read-guide --page agent-exploration`. Scripts for
-notebooks should use `# %%` section markers when helpful.
+Multi-step exploration: `read-guide --page agent-exploration`.
 
 ## Workflow
 
 1. `read-guide --page … --topic …` only when needed (skip INDEX/`00` by default)
 2. Outline before `read-cell`
-3. Substantial analysis → small scratch steps → verify → notebook
+3. Tiny edit → direct notebook tools; substantial analysis → scratch → `python scratch/<name>.py` → `scratch-to-notebook`
 4. New notebooks under `scratch/` unless named otherwise
 5. Edit by index; re-read before replying; summarize run outputs
 

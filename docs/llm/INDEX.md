@@ -8,8 +8,9 @@ or the user needs a one-line answer already in the active notebook.
 ## Production cold start (Cohort Scout)
 
 Do **not** load this index, `AGENTS.md`, or `00-agent-workspace` by default.
-Call one `read-guide --page PAGE` (add `--topic` when intent is known). Use this
-index only when the page is unclear. Use `00` only for refusal/scope wording.
+Call one `jupyter-mcp read-guide --page PAGE` (add `--topic` when intent is known).
+Use this index only when the page is unclear. Use `00` only for refusal/scope wording.
+Never bare `read-guide` and never `find`/`grep` the wiki tree.
 
 ## IDE / Cursor startup
 
@@ -42,7 +43,7 @@ index only when the page is unclear. Use `00` only for refusal/scope wording.
 | Notebook create/edit | `04-jupyter-mcp` | `payload` |
 | Env / `Client.from_env()` | `05-env-and-backend` | `from_env` |
 | Compaction / handoff | `06-runtime-state` | — |
-| Exploration / bottlenecks | `agent-exploration` | — |
+| Exploration | `agent-exploration` | — |
 | Stroke / novel stroke | `recipes/stroke-analysis` only | `novel` |
 | Client / tests / commits | `dev-contributor` | — |
 

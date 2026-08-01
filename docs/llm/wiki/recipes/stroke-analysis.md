@@ -8,14 +8,14 @@ Self-contained for stroke stats — do not chain `02`/`03`/`04` on startup.
 
 ## Novel analysis (default)
 
-1. `read-guide --page recipes/stroke-analysis --topic novel`
-2. `mip-data-model-summary stroke --version 3.7`
+1. `jupyter-mcp read-guide --page recipes/stroke-analysis --topic novel`
+2. `jupyter-mcp mip-data-model-summary stroke --version 3.7`
 3. `python scratch/stroke_preflight.py` — **stop** if required vars fail
 4. Pre-specify one primary hypothesis (outcome, predictors, SSR-only)
-5. `scratch-copy-template scratch/<name>.py --source examples/algorithm_examples.py`
-6. Trim/edit with `scratch-append-lines` / `scratch-replace-snippet` only
+5. `jupyter-mcp scratch-copy-template scratch/<name>.py --source examples/algorithm_examples.py`
+6. Trim/edit with `jupyter-mcp scratch-append-lines` / `scratch-replace-snippet` only
 7. `python scratch/<name>.py`; save CSVs under `scratch/`
-8. `scratch-to-notebook` → `notebook-outline` → `open-file`
+8. `jupyter-mcp scratch-to-notebook` → `notebook-outline` → `open-file`
 9. Primary report: **adjusted logistic OR (95% CI)**; secondary p-values exploratory
 
 Patterns: `examples/feres_analysis.ipynb`, `examples/algorithm_examples.py`.

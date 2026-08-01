@@ -2,7 +2,7 @@
 
 This prototype adds Jupyter AI to the local JupyterLab workflow so developers can test a vLLM-backed Codex assistant. The repository does not include personal credentials or tokens.
 
-Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Cohort Scout at a vLLM Responses-compatible `/v1/responses` endpoint and the `nemotron3-super-nvfp4` model.
+Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Cohort Scout at a vLLM Responses-compatible `/v1/responses` endpoint and the `qwen36-nvfp4` model.
 
 Architecture overview and Mermaid source: [jupyter-ai-architecture.md](jupyter-ai-architecture.md).
 
@@ -23,7 +23,7 @@ uv run mip-notebook
 Open:
 
 ```text
-http://127.0.0.1:8888/lab/tree/workspace/examples/feres_analysis.ipynb?token=dev
+http://127.0.0.1:8888/lab/tree/examples/feres_analysis.ipynb?token=dev
 ```
 
 ## Install Codex ACP
@@ -44,7 +44,7 @@ npm install -g @zed-industries/codex-acp
 The vLLM Codex workflow uses a temporary `CODEX_HOME` containing `config.toml` and `model-catalog.json`:
 
 ```toml
-model = "nemotron3-super-nvfp4"
+model = "qwen36-nvfp4"
 model_provider = "vllm"
 model_catalog_json = "/tmp/mip-codex-home-.../model-catalog.json"
 model_context_window = 131072
@@ -66,11 +66,15 @@ base_url = "http://100.92.46.71:8001/v1"
 wire_api = "responses"
 ```
 
-The generated model catalog contains only `nemotron3-super-nvfp4` (vLLM alias for
-`nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4`) with a 131072-token agent context
+The generated model catalog contains only `qwen36-nvfp4` (vLLM alias for
+`nvidia/Qwen3.6-35B-A3B-NVFP4`) with a 131072-token agent context
 window (served `max_model_len` may be higher). Default reasoning effort is `low`
 for chat speed; set `CODEX_REASONING_EFFORT=medium` for multi-step exploration.
-Catalog metadata intentionally keeps the Responses payload compatible with the current vLLM shim by setting `support_verbosity` to `false`, `apply_patch_tool_type` to `null`, `supports_parallel_tool_calls` to `false`, and `use_responses_lite` to `true`.
+Catalog metadata keeps the Responses payload compatible with vLLM by setting
+`support_verbosity` to `false`, `apply_patch_tool_type` to `null`, and
+`supports_parallel_tool_calls` to `false`. For Qwen, `use_responses_lite` is
+`false` so shell/function tool calls are returned (lite mode caused plain-text
+echoes instead of tool execution).
 
 The runner also prepends a generated `codex-acp` wrapper to `PATH`. The wrapper passes `-c approval_policy="never"`, `-c sandbox_mode="danger-full-access"`, and `-c shell_environment_policy.inherit="all"` directly to `codex-acp`; this is needed because the ACP process otherwise starts Codex with `on-request` approvals and a read-only sandbox even when the temporary `config.toml` contains the desired values.
 
@@ -126,20 +130,22 @@ curl http://100.92.46.71:8001/v1/models
 Expected model IDs include:
 
 ```text
-nemotron3-super-nvfp4
+qwen36-nvfp4
 ```
 
-The local and Hub runners use `nemotron3-super-nvfp4`.
+The local and Hub runners use `qwen36-nvfp4`.
 
 The endpoint must support the Responses API path used by Codex:
 
 ```bash
 curl http://100.92.46.71:8001/v1/responses \
   -H 'Content-Type: application/json' \
-  -d '{"model":"nemotron3-super-nvfp4","input":"Say OK only","max_output_tokens":256}'
+  -d '{"model":"qwen36-nvfp4","input":"Say OK only","max_output_tokens":2048}'
 ```
 
-`nemotron3-super-nvfp4` may emit reasoning tokens before the final message; use a large enough `max_output_tokens` value in manual curl tests.
+`qwen36-nvfp4` may emit a reasoning block before the final message; use at least
+`2048` `max_output_tokens` in manual curl tests. For interactive Cohort Scout
+latency, serve with thinking disabled by default (see [operators.md](operators.md)).
 
 ## Agent Onboarding
 

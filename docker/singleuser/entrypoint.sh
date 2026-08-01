@@ -15,9 +15,9 @@ fi
 
 mkdir -p "${WORK}/scratch"
 
-# Sync shipped scratch templates into existing PVC workspaces without overwriting user files.
+# Sync shipped scratch helpers into existing PVC workspaces without overwriting user files.
 if [ -d "${TEMPLATE}/templates/scratch" ]; then
-  for shipped in "${TEMPLATE}/templates/scratch"/*.py "${TEMPLATE}/templates/scratch"/*.template.md; do
+  for shipped in "${TEMPLATE}/templates/scratch"/*.py; do
     [ -f "${shipped}" ] || continue
     dest="${WORK}/scratch/$(basename "${shipped}")"
     if [ ! -f "${dest}" ]; then

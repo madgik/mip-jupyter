@@ -62,15 +62,16 @@ uv sync
 uv run mip-notebook
 ```
 
-The local runner opens JupyterLab at `127.0.0.1:8888` with token `dev`. By
-default it opens `workspace/examples/feres_analysis.ipynb`, syncs
-`docs/user/` into `workspace/docs/`, and sets `PLATFORM_BACKEND_URL` to
+The local runner opens JupyterLab at `127.0.0.1:8888` with token `dev`, rooted
+at `workspace/` (same file tree as production `/home/jovyan/work`). By default
+it opens `examples/feres_analysis.ipynb`, syncs `docs/user/` into
+`workspace/docs/`, and sets `PLATFORM_BACKEND_URL` to
 `http://127.0.0.1:8080/services` unless it is already configured.
 
 Open a different notebook:
 
 ```bash
-MIP_NOTEBOOK=workspace/Welcome.ipynb uv run mip-notebook
+MIP_NOTEBOOK=Welcome.ipynb uv run mip-notebook
 ```
 
 ## Build and Test

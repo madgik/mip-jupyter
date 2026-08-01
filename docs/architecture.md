@@ -39,4 +39,4 @@ Deployment artifacts (Dockerfiles, Hub config, client source, agent wiki) are no
 
 ## Local development
 
-Developers run the full repository with `uv run mip-notebook`. The runner syncs `docs/user/` into `workspace/docs/`, sets `MIP_JUPYTER_ROOT` to `workspace/`, and uses the repository root as JupyterLab root so `python-client/` remains editable.
+Developers run `uv run mip-notebook` (or `./run-local-llm-codex.sh`). The runner syncs `docs/user/` into `workspace/docs/`, sets `MIP_JUPYTER_ROOT` and JupyterLab `ServerApp.root_dir` to `workspace/` (production parity with `/home/jovyan/work`), and keeps agent docs / editable `python-client` on the repo via `MIP_AGENT_DOCS` and the uv environment.

@@ -57,17 +57,17 @@ def _clear_codex_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
-def test_catalog_defaults_to_nemotron_only() -> None:
-    assert DEFAULT_CODEX_MODELS == ("nemotron3-super-nvfp4",)
+def test_catalog_defaults_to_qwen_only() -> None:
+    assert DEFAULT_CODEX_MODELS == ("qwen36-nvfp4",)
 
 
-def test_from_env_default_model_is_nemotron() -> None:
+def test_from_env_default_model_is_qwen() -> None:
     settings = CodexSettings.from_env()
     assert settings.model == DEFAULT_CODEX_MODEL
-    assert settings.model == "nemotron3-super-nvfp4"
+    assert settings.model == "qwen36-nvfp4"
     assert settings.context_window == 131072
     assert settings.auto_compact_limit == 112000
-    assert settings.catalog_models == ("nemotron3-super-nvfp4",)
+    assert settings.catalog_models == ("qwen36-nvfp4",)
     assert settings.reasoning_effort == DEFAULT_CODEX_REASONING_EFFORT
     assert settings.reasoning_effort == "low"
     assert not settings.enable_native_jupyter_mcp
@@ -91,38 +91,38 @@ def test_from_env_invalid_reasoning_effort_raises(monkeypatch: pytest.MonkeyPatc
         CodexSettings.from_env()
 
 
-def test_model_catalog_contains_nemotron_model_only(tmp_path: Path) -> None:
+def test_model_catalog_contains_qwen_model_only(tmp_path: Path) -> None:
     settings = CodexSettings.from_env()
     catalog_path = tmp_path / "model-catalog.json"
     write_codex_model_catalog(catalog_path, settings)
 
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     slugs = [entry["slug"] for entry in catalog["models"]]
-    assert slugs == ["nemotron3-super-nvfp4"]
+    assert slugs == ["qwen36-nvfp4"]
 
-    nemotron = catalog["models"][0]
-    assert nemotron["context_window"] == 131072
-    assert nemotron["default_reasoning_level"] == "low"
-    assert {level["effort"] for level in nemotron["supported_reasoning_levels"]} == {
+    qwen = catalog["models"][0]
+    assert qwen["context_window"] == 131072
+    assert qwen["default_reasoning_level"] == "low"
+    assert {level["effort"] for level in qwen["supported_reasoning_levels"]} == {
         "minimal",
         "low",
         "medium",
     }
-    assert "recipes/stroke-analysis" in nemotron["base_instructions"]
-    assert "--topic" in nemotron["base_instructions"]
-    assert "skip AGENTS" in nemotron["base_instructions"]
-    assert SCOPE_RULES in nemotron["base_instructions"]
-    assert MCP_CLI_RULES in nemotron["base_instructions"]
-    assert TOOL_PAYLOAD_RULES in nemotron["base_instructions"]
-    assert PRIVACY_RULES in nemotron["base_instructions"]
-    assert ROUTING_RULES in nemotron["base_instructions"]
-    assert "available_algorithms" not in nemotron["base_instructions"]
-    assert "stroke_preflight" not in nemotron["base_instructions"]
-    assert "write_stdin" in nemotron["base_instructions"]
-    assert "Subcommands:" not in nemotron["base_instructions"]
-    assert "never call native mcp__* tools" in nemotron["base_instructions"]
-    assert "never retry writes" in nemotron["base_instructions"]
-    assert len(nemotron["base_instructions"]) <= BASE_INSTRUCTIONS_MAX_CHARS
+    assert "recipes/stroke-analysis" in qwen["base_instructions"]
+    assert "--topic" in qwen["base_instructions"]
+    assert "skip AGENTS" in qwen["base_instructions"]
+    assert SCOPE_RULES in qwen["base_instructions"]
+    assert MCP_CLI_RULES in qwen["base_instructions"]
+    assert TOOL_PAYLOAD_RULES in qwen["base_instructions"]
+    assert PRIVACY_RULES in qwen["base_instructions"]
+    assert ROUTING_RULES in qwen["base_instructions"]
+    assert "available_algorithms" not in qwen["base_instructions"]
+    assert "stroke_preflight" not in qwen["base_instructions"]
+    assert "write_stdin" in qwen["base_instructions"]
+    assert "Subcommands:" not in qwen["base_instructions"]
+    assert "never call native mcp__* tools" in qwen["base_instructions"]
+    assert "never retry writes" in qwen["base_instructions"]
+    assert len(qwen["base_instructions"]) <= BASE_INSTRUCTIONS_MAX_CHARS
     assert len(build_base_instructions()) <= BASE_INSTRUCTIONS_MAX_CHARS
 
 
@@ -138,7 +138,7 @@ def test_native_model_instructions_allow_native_mcp(tmp_path: Path) -> None:
     assert "never call native mcp__* tools" not in instructions
 
 
-def test_config_toml_uses_default_nemotron_model(tmp_path: Path) -> None:
+def test_config_toml_uses_default_qwen_model(tmp_path: Path) -> None:
     settings = CodexSettings.from_env()
     catalog_path = tmp_path / "model-catalog.json"
     config_path = tmp_path / "config.toml"
@@ -146,7 +146,7 @@ def test_config_toml_uses_default_nemotron_model(tmp_path: Path) -> None:
     write_codex_config(config_path, settings, catalog_path)
 
     config = config_path.read_text(encoding="utf-8")
-    assert 'model = "nemotron3-super-nvfp4"' in config
+    assert 'model = "qwen36-nvfp4"' in config
     assert "model_context_window = 131072" in config
     assert "model_auto_compact_token_limit = 112000" in config
     assert 'model_reasoning_effort = "low"' in config
@@ -196,10 +196,21 @@ def test_notebook_cli_context_overrides_are_used() -> None:
 
     settings = notebook_runner._codex_settings_from_args(args)
 
-    assert settings.model == "nemotron3-super-nvfp4"
-    assert settings.catalog_models == ("nemotron3-super-nvfp4",)
+    assert settings.model == "qwen36-nvfp4"
+    assert settings.catalog_models == ("qwen36-nvfp4",)
     assert settings.context_window == 4096
     assert settings.auto_compact_limit == 3500
+
+
+def test_sanitize_path_drops_error_text_and_keeps_essentials() -> None:
+    cleaned = notebook_runner._sanitize_path(
+        '/tmp/x/bin:Unknown command: "bin":/usr/games',
+        prepend=Path("/tmp/codex/bin"),
+    )
+    assert cleaned.startswith("/tmp/codex/bin:")
+    assert "Unknown" not in cleaned
+    assert "/usr/bin" in cleaned.split(":")
+    assert "/bin" in cleaned.split(":")
 
 
 def test_vllm_unavailable_detection_matches_connection_failures() -> None:
@@ -278,7 +289,7 @@ def test_bootstrap_codex_writes_catalog_and_config(tmp_path: Path) -> None:
 
     catalog = json.loads((codex_home / "model-catalog.json").read_text(encoding="utf-8"))
     assert len(catalog["models"]) == 1
-    assert catalog["models"][0]["slug"] == "nemotron3-super-nvfp4"
+    assert catalog["models"][0]["slug"] == "qwen36-nvfp4"
     assert MIP_PERSONA_NAME in catalog["models"][0]["base_instructions"]
     assert (codex_home / "config.toml").is_file()
     jupyter_mcp_wrapper = codex_home / "bin" / "jupyter-mcp"

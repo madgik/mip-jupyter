@@ -15,7 +15,7 @@ trap cleanup EXIT
 docker run -d --name "${CONTAINER}" -p "${PORT}:8888" \
   -e JUPYTER_TOKEN="${TOKEN}" \
   -e CODEX_VLLM_BASE_URL=http://127.0.0.1:9/v1 \
-  -e CODEX_VLLM_MODEL=nemotron3-super-nvfp4 \
+  -e CODEX_VLLM_MODEL=qwen36-nvfp4 \
   "${IMAGE}"
 
 echo "Waiting for Jupyter..."

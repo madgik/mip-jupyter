@@ -100,26 +100,6 @@ def test_scratch_list_cli_routes() -> None:
     assert arguments == {}
 
 
-def test_scratch_log_bottleneck_cli_routes() -> None:
-    args = jupyter_mcp_cli._parser().parse_args(
-        [
-            "scratch-log-bottleneck",
-            "t_test",
-            "failed",
-            "platform_error",
-            "full error here",
-        ]
-    )
-    name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
-    assert name == "scratch_log_bottleneck"
-    assert arguments == {
-        "step": "t_test",
-        "status": "failed",
-        "blocker": "platform_error",
-        "note": "full error here",
-    }
-
-
 def test_read_guide_index_page_routes_to_agent_read_guide() -> None:
     args = jupyter_mcp_cli._parser().parse_args(["read-guide", "--page", "index"])
     name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
@@ -127,32 +107,13 @@ def test_read_guide_index_page_routes_to_agent_read_guide() -> None:
     assert arguments["page"] == "index"
 
 
-def test_scratch_init_cli_routes() -> None:
-    args = jupyter_mcp_cli._parser().parse_args(["scratch-init"])
-    name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
-    assert name == "scratch_init"
-    assert arguments == {}
-
-
-def test_scratch_copy_file_cli_routes() -> None:
-    args = jupyter_mcp_cli._parser().parse_args(
-        ["scratch-copy-file", "scratch/_session.md", "scratch/_session.template.md"]
-    )
-    name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
-    assert name == "scratch_copy_file"
-    assert arguments == {
-        "dest": "scratch/_session.md",
-        "source": "scratch/_session.template.md",
-    }
-
-
 def test_scratch_read_cli_routes() -> None:
     args = jupyter_mcp_cli._parser().parse_args(
-        ["scratch-read", "scratch/_session.md", "--max-chars", "2000"]
+        ["scratch-read", "scratch/notes.md", "--max-chars", "2000"]
     )
     name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
     assert name == "scratch_read"
-    assert arguments == {"path": "scratch/_session.md", "max_chars": 2000}
+    assert arguments == {"path": "scratch/notes.md", "max_chars": 2000}
 
 
 def test_content_file_rejects_outside_workspace(tmp_path) -> None:

@@ -4,15 +4,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASE_URL="${CODEX_VLLM_BASE_URL:-http://100.92.46.71:8001/v1}"
-MODEL="${CODEX_VLLM_MODEL:-nemotron3-super-nvfp4}"
+MODEL="${CODEX_VLLM_MODEL:-qwen36-nvfp4}"
 
 echo "Checking vLLM models at ${BASE_URL}..."
 curl -fsS "${BASE_URL}/models" | grep -q "${MODEL}"
 
 echo "Checking Responses API..."
+# Qwen may emit a reasoning block before the final message; keep headroom.
 curl -fsS "${BASE_URL}/responses" \
   -H 'Content-Type: application/json' \
-  -d "{\"model\":\"${MODEL}\",\"input\":\"Reply with OK only.\",\"max_output_tokens\":256}" \
+  -d "{\"model\":\"${MODEL}\",\"input\":\"Reply with OK only.\",\"max_output_tokens\":2048}" \
   | grep -q '"status"'
 
 echo "Running shell guard, persona, and context-eval regression tests..."

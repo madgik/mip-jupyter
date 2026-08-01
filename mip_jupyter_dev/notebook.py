@@ -29,9 +29,46 @@ from .mip_acp_persona import MIP_PERSONA_NAME
 
 DEFAULT_BACKEND_URL = "http://127.0.0.1:8080/services"
 DEFAULT_TOKEN = "dev"
-DEFAULT_NOTEBOOK = "workspace/examples/feres_analysis.ipynb"
+# Paths are relative to ServerApp.root_dir (= workspace/), matching production.
+DEFAULT_NOTEBOOK = "examples/feres_analysis.ipynb"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8888
+
+
+def _notebook_under_workspace(notebook: str) -> str:
+    """Normalize Lab tree paths; strip a leading workspace/ from older env values."""
+    normalized = notebook.replace("\\", "/").lstrip("/")
+    if normalized == "workspace" or normalized.startswith("workspace/"):
+        return normalized[len("workspace") :].lstrip("/")
+    return normalized
+
+
+def _sanitize_path(path_value: str, *, prepend: Path | None = None) -> str:
+    """Drop junk PATH entries and ensure standard bins remain resolvable.
+
+    Cursor/agent shells sometimes pollute PATH with error text (e.g.
+    ``Unknown command: "bin"``) and omit ``/usr/bin``. Codex inherits this via
+    Jupyter, so ``jupyter-mcp`` / ``python`` lookups then fail.
+    """
+    parts: list[str] = []
+    seen: set[str] = set()
+
+    def _add(entry: str) -> None:
+        if not entry or entry in seen:
+            return
+        # Reject non-directory noise (shell error fragments, empty slots).
+        if not Path(entry).is_dir():
+            return
+        seen.add(entry)
+        parts.append(entry)
+
+    if prepend is not None:
+        _add(str(prepend))
+    for entry in path_value.split(os.pathsep):
+        _add(entry)
+    for essential in ("/usr/local/bin", "/usr/bin", "/bin"):
+        _add(essential)
+    return os.pathsep.join(parts)
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -39,6 +76,38 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if value is None:
         return default
     return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _sanitize_path(path_value: str, *, prepend: Path | None = None) -> str:
+    """Drop garbage PATH entries and ensure standard bins remain discoverable.
+
+    Cursor/agent shells sometimes inject error text (e.g. ``Unknown command: "bin"``)
+    into PATH, which breaks Codex agent shells that inherit Jupyter's env.
+    """
+    essentials = ("/usr/local/bin", "/usr/bin", "/bin")
+    seen: set[str] = set()
+    parts: list[str] = []
+
+    def _add(entry: str) -> None:
+        if not entry or entry in seen:
+            return
+        # Reject error text and other non-directory junk.
+        if "Unknown command" in entry or "\n" in entry or "\r" in entry:
+            return
+        if not entry.startswith("/") and not entry.startswith("."):
+            return
+        seen.add(entry)
+        parts.append(entry)
+
+    if prepend is not None:
+        _add(str(prepend))
+    for entry in path_value.split(os.pathsep):
+        _add(entry.strip())
+    for entry in essentials:
+        if os.path.isdir(entry):
+            _add(entry)
+    return os.pathsep.join(parts)
+
 
 
 def _is_port_free(host: str, port: int) -> bool:
@@ -182,17 +251,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.mcp_port is None:
         args.mcp_port = _choose_mcp_port()
     root = _repo_root()
+    work = root / "workspace"
+    notebook = _notebook_under_workspace(args.notebook)
     _sync_workspace_user_docs(root)
     _sync_scratch_templates(root)
 
     env = os.environ.copy()
-    env.setdefault("MIP_JUPYTER_ROOT", str(root / "workspace"))
+    env.setdefault("MIP_JUPYTER_ROOT", str(work))
     if not env.get("MIP_AGENT_DOCS"):
         env["MIP_AGENT_DOCS"] = str(root)
     if not env.get("PLATFORM_BACKEND_URL") and not env.get("MIP_BASE_URL"):
         env["PLATFORM_BACKEND_URL"] = DEFAULT_BACKEND_URL
-    backend_url = env.get("PLATFORM_BACKEND_URL") or env.get("MIP_BASE_URL")
-    url = f"http://{args.host}:{args.port}/lab/tree/{args.notebook}?token={args.token}"
+    url = f"http://{args.host}:{args.port}/lab/tree/{notebook}?token={args.token}"
 
     settings = _codex_settings_from_args(args)
 
@@ -202,9 +272,16 @@ def main(argv: list[str] | None = None) -> int:
         wrapper_bin = bootstrap_codex(codex_home_path, jupyter_config_path, settings)
 
         env["CODEX_HOME"] = codex_home
-        if wrapper_bin is not None:
-            env["PATH"] = f"{wrapper_bin}{os.pathsep}{env.get('PATH', '')}"
+        env["PATH"] = _sanitize_path(env.get("PATH", ""), prepend=wrapper_bin)
         env["JUPYTER_MCP_URL"] = f"http://127.0.0.1:{args.mcp_port}/mcp"
+        # Agent shells may run as root; keep Jupyter runtime under a writable temp dir.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            runtime_dir = Path("/tmp/mip-jupyter-runtime")
+            data_dir = Path("/tmp/mip-jupyter-data")
+            runtime_dir.mkdir(parents=True, exist_ok=True)
+            data_dir.mkdir(parents=True, exist_ok=True)
+            env.setdefault("JUPYTER_RUNTIME_DIR", str(runtime_dir))
+            env.setdefault("JUPYTER_DATA_DIR", str(data_dir))
 
         command = [
             sys.executable,
@@ -214,11 +291,13 @@ def main(argv: list[str] | None = None) -> int:
             f"--ServerApp.ip={args.host}",
             f"--ServerApp.port={args.port}",
             f"--ServerApp.token={args.token}",
-            f"--ServerApp.root_dir={root}",
-            f"--ServerApp.default_url=/lab/tree/{args.notebook}",
+            f"--ServerApp.root_dir={work}",
+            f"--ServerApp.default_url=/lab/tree/{notebook}",
             "--config",
             str(jupyter_config_path),
         ]
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            command.append("--allow-root")
 
         print(f"JupyterLab URL: {url}")
         print("MIP platform connection: configured")

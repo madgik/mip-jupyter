@@ -23,11 +23,31 @@ Notebooks and the `mip` client expect:
 When Cohort Scout / vLLM is enabled, Hub spawners also pass:
 
 - `CODEX_VLLM_BASE_URL` (required to bootstrap Codex)
-- `CODEX_VLLM_MODEL` (default `nemotron3-super-nvfp4`)
+- `CODEX_VLLM_MODEL` (default `qwen36-nvfp4`)
 - `CODEX_REASONING_EFFORT` (default `low`; use `medium` for exploration pods)
 - Optional: `CODEX_VLLM_PROVIDER`, `CODEX_MODEL_CONTEXT_WINDOW`, `CODEX_AUTO_COMPACT_TOKEN_LIMIT`
 
 Hub spawner configuration should inject backend URL and token at spawn time. See `docker/hub/jupyterhub_config.py` for the reference implementation.
+
+Keep the Codex agent window at **131072** (default) even when vLLM serves
+`max_model_len=262144`. Do not enable native Responses MCP for this stack; Cohort
+Scout uses the shell bridge.
+
+### Required vLLM serve profile (`qwen36-nvfp4`)
+
+Serve `nvidia/Qwen3.6-35B-A3B-NVFP4` as id `qwen36-nvfp4` with:
+
+- `--reasoning-parser qwen3`
+- `--enable-auto-tool-choice`
+- `--tool-call-parser qwen3_xml` (or `qwen3_coder` if `qwen3_xml` is unavailable)
+- `--default-chat-template-kwargs '{"enable_thinking": false}'` for interactive Hub chat
+- `--max-model-len 262144` (agent context stays capped at 131072 in Codex)
+- `--gpu-memory-utilization 0.90` on the dedicated GPU box (more KV cache headroom; keep `max-num-seqs 1` for light concurrency)
+
+Thinking on by default burns output budget on CoT before the final message. Codex
+cannot pass `chat_template_kwargs` on the Responses path, so disable thinking at
+serve time for default chat; use `CODEX_REASONING_EFFORT=medium` only on
+exploration pods if you re-enable thinking server-side for those workloads.
 
 ## Image build and release
 

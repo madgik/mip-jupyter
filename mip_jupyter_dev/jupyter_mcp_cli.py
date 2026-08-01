@@ -212,19 +212,6 @@ def _parser() -> argparse.ArgumentParser:
     scratch_copy.add_argument("dest")
     scratch_copy.add_argument("--source", default=tools.SCRATCH_TEMPLATE_DEFAULT)
 
-    scratch_copy_file = subparsers.add_parser(
-        "scratch-copy-file",
-        help="Copy an allowlisted scratch Markdown template to scratch/<name>.md",
-    )
-    scratch_copy_file.add_argument("dest")
-    scratch_copy_file.add_argument("source")
-
-    scratch_init_cmd = subparsers.add_parser(
-        "scratch-init",
-        help="Create scratch/_session.md and scratch/_bottlenecks.md from templates",
-    )
-    scratch_init_cmd.set_defaults(no_args=True)
-
     scratch_read_cmd = subparsers.add_parser("scratch-read", help="Read a bounded scratch artifact")
     scratch_read_cmd.add_argument("path")
     scratch_read_cmd.add_argument("--max-chars", type=int, default=4000)
@@ -251,14 +238,6 @@ def _parser() -> argparse.ArgumentParser:
 
     scratch_list_cmd = subparsers.add_parser("scratch-list", help="List scratch artifacts for resume")
     scratch_list_cmd.set_defaults(no_args=True)
-
-    scratch_log = subparsers.add_parser(
-        "scratch-log-bottleneck", help="Append one row to scratch/_bottlenecks.md"
-    )
-    scratch_log.add_argument("step")
-    scratch_log.add_argument("status")
-    scratch_log.add_argument("blocker")
-    scratch_log.add_argument("note", nargs="+")
 
     return parser
 
@@ -320,10 +299,6 @@ def _tool_call_for_args(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
         return "mip_algorithm_summary", {"limit": args.limit}
     if command == "scratch-copy-template":
         return "scratch_copy_template", {"dest": args.dest, "source": args.source}
-    if command == "scratch-copy-file":
-        return "scratch_copy_file", {"dest": args.dest, "source": args.source}
-    if command == "scratch-init":
-        return "scratch_init", {}
     if command == "scratch-read":
         return "scratch_read", {"path": args.path, "max_chars": args.max_chars}
     if command == "scratch-append-lines":
@@ -345,13 +320,6 @@ def _tool_call_for_args(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
         }
     if command == "scratch-list":
         return "scratch_list", {}
-    if command == "scratch-log-bottleneck":
-        return "scratch_log_bottleneck", {
-            "step": args.step,
-            "status": args.status,
-            "blocker": args.blocker,
-            "note": _text_arg(args.note),
-        }
     raise AssertionError(command)
 
 

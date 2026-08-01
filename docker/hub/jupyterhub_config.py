@@ -4,7 +4,7 @@ from platform_token_service import PlatformTokenHandler
 from platform_token_utils import normalize_cpu, normalize_memory, refresh_access_token, token_is_expired
 
 
-DEFAULT_CODEX_MODEL = "nemotron3-super-nvfp4"
+DEFAULT_CODEX_MODEL = "qwen36-nvfp4"
 
 
 def _env(name, default=""):

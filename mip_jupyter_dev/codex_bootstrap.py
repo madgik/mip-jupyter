@@ -7,6 +7,7 @@ import json
 import os
 import shlex
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,10 +36,10 @@ PRIVACY_RULES = (
 )
 
 MCP_CLI_RULES = (
-    "Shell bridge: jupyter-mcp or python -m mip_jupyter_dev.jupyter_mcp_cli only; "
-    "never call native mcp__* tools; never edit .ipynb via JSON/filesystem. "
-    "Payloads: read-guide --page 04-jupyter-mcp --topic payload. "
-    "Retry reads once; never retry writes without scratch-list/notebook-outline."
+    "Shell bridge only: prefix every MCP call with jupyter-mcp "
+    "(or python -m mip_jupyter_dev.jupyter_mcp_cli). "
+    "Never bare read-guide/scratch-*; never native mcp__*; never edit .ipynb via JSON/fs. "
+    "Retry reads once; never retry writes without jupyter-mcp scratch-list/notebook-outline."
 )
 
 NATIVE_MCP_RULES = (
@@ -47,20 +48,21 @@ NATIVE_MCP_RULES = (
 )
 
 TOOL_PAYLOAD_RULES = (
-    "Small JSON args. No write_stdin/heredocs/shell writes. Prefer "
-    "scratch-copy-template, scratch-append-lines, scratch-replace-snippet, "
-    "scratch-to-notebook, append-code."
+    "Small JSON args. No write_stdin/heredocs/shell writes. "
+    "Tiny notebook edits: jupyter-mcp append/edit-cell; multi-step MIP: "
+    "jupyter-mcp scratch-copy-template → python scratch/<name>.py → "
+    "jupyter-mcp scratch-to-notebook."
 )
 
 ROUTING_RULES = (
     "Cold start: skip AGENTS/00/index when intent is clear. "
-    "read-guide --page PAGE --topic when known "
+    "jupyter-mcp read-guide --page PAGE --topic when known "
     "(novel stroke→recipes/stroke-analysis --topic novel; "
     "notebook tools→04-jupyter-mcp --topic payload; "
     "algorithms→07-pipeline-algorithms --topic methods; "
     "env→05-env-and-backend --topic from_env; onboarding→01-onboarding). "
     "index only if unclear; 00-agent-workspace only for refusal/scope. "
-    "One guide page per turn."
+    "One guide page per turn. Never find/grep the wiki tree."
 )
 
 # Soft budget for production catalog base_instructions (chars).
@@ -79,8 +81,8 @@ def build_base_instructions(*, enable_native_jupyter_mcp: bool = False) -> str:
 BASE_INSTRUCTIONS = build_base_instructions()
 
 DEFAULT_CODEX_BASE_URL = "http://100.92.46.71:8001/v1"
-# Must match the vLLM /v1/models id (alias for nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4).
-DEFAULT_CODEX_MODEL = "nemotron3-super-nvfp4"
+# Must match the vLLM /v1/models id (alias for nvidia/Qwen3.6-35B-A3B-NVFP4).
+DEFAULT_CODEX_MODEL = "qwen36-nvfp4"
 DEFAULT_CODEX_PROVIDER = "vllm"
 # Agent window is capped below the served max_model_len (262144) to limit context bloat.
 DEFAULT_CODEX_CONTEXT_WINDOW = 131072
@@ -101,13 +103,13 @@ class VllmModelProfile:
 
 
 VLLM_MODEL_REGISTRY: dict[str, VllmModelProfile] = {
-    "nemotron3-super-nvfp4": VllmModelProfile(
-        slug="nemotron3-super-nvfp4",
-        display_name="nemotron3-super-nvfp4",
+    "qwen36-nvfp4": VllmModelProfile(
+        slug="qwen36-nvfp4",
+        display_name="qwen36-nvfp4",
         description=(
-            "NVIDIA Nemotron 3 Super 120B-A12B NVFP4 via vLLM "
-            "(served id nemotron3-super-nvfp4; HF root "
-            "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4)."
+            "Qwen3.6-35B-A3B NVFP4 via vLLM "
+            "(served id qwen36-nvfp4; HF root "
+            "nvidia/Qwen3.6-35B-A3B-NVFP4)."
         ),
         context_window=131072,
         auto_compact_limit=112000,
@@ -241,7 +243,9 @@ def _catalog_entry(
         "experimental_supported_tools": [],
         "input_modalities": ["text"],
         "supports_search_tool": False,
-        "use_responses_lite": True,
+        # Qwen on vLLM needs full Responses tool payloads; lite mode returns
+        # plain text instead of shell/function_call items.
+        "use_responses_lite": False,
     }
 
 
@@ -281,7 +285,8 @@ def write_codex_acp_wrapper(path: Path, executable: str) -> None:
 
 def write_jupyter_mcp_cli_wrapper(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    script = "#!/bin/sh\nexec python -m mip_jupyter_dev.jupyter_mcp_cli \"$@\"\n"
+    # Use the active interpreter; bare `python` is often missing on Linux hosts.
+    script = f"#!/bin/sh\nexec {shlex.quote(sys.executable)} -m mip_jupyter_dev.jupyter_mcp_cli \"$@\"\n"
     path.write_text(script, encoding="utf-8")
     path.chmod(0o755)
 

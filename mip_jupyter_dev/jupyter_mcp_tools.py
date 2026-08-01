@@ -39,20 +39,8 @@ MAX_SCRATCH_APPEND_LINES = 20
 MAX_SCRATCH_APPEND_CHARS = 2048
 MAX_SCRATCH_SNIPPET_CHARS = 1024
 SCRATCH_TEMPLATE_DEFAULT = "examples/algorithm_examples.py"
-SCRATCH_BOTTLENECK_PATH = "scratch/_bottlenecks.md"
-SCRATCH_BOTTLENECK_TEMPLATE = "scratch/_bottlenecks.template.md"
-SCRATCH_SESSION_PATH = "scratch/_session.md"
-SCRATCH_SESSION_TEMPLATE = "scratch/_session.template.md"
-ALLOWED_SCRATCH_TEMPLATES = frozenset(
-    {
-        SCRATCH_SESSION_TEMPLATE,
-        SCRATCH_BOTTLENECK_TEMPLATE,
-    }
-)
 MAX_SCRATCH_READ_CHARS = 8000
 MAX_SCRATCH_LIST_ITEMS = 50
-MAX_SCRATCH_BOTTLENECK_FIELD = 120
-MAX_SCRATCH_BOTTLENECK_NOTE = 360
 MAX_NOTEBOOK_OUTLINE_CELLS = 100
 MAX_EXECUTED_CELL_SUMMARIES = 20
 # Hard caps for MIP metadata list payloads (production Cohort Scout context).
@@ -82,14 +70,11 @@ SAFE_JUPYTER_MCP_TOOLS = [
     "mip_jupyter_dev.jupyter_mcp_tools:mip_search_variables",
     "mip_jupyter_dev.jupyter_mcp_tools:mip_algorithm_summary",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_copy_template",
-    "mip_jupyter_dev.jupyter_mcp_tools:scratch_copy_file",
-    "mip_jupyter_dev.jupyter_mcp_tools:scratch_init",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_read",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_append_lines",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_replace_snippet",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_to_notebook",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_list",
-    "mip_jupyter_dev.jupyter_mcp_tools:scratch_log_bottleneck",
 ]
 
 
@@ -931,46 +916,6 @@ async def scratch_copy_template(
     return {"ok": True, "source": src_rel.as_posix(), "dest": dest_rel.as_posix()}
 
 
-async def scratch_copy_file(
-    dest: str,
-    source: str,
-) -> dict[str, Any]:
-    """Copy an allowlisted scratch Markdown template to a new scratch file."""
-
-    src_rel = _workspace_relative_path(source)
-    src_key = src_rel.as_posix()
-    if src_key not in ALLOWED_SCRATCH_TEMPLATES:
-        allowed = ", ".join(sorted(ALLOWED_SCRATCH_TEMPLATES))
-        raise ValueError(f"Unknown scratch template {source!r}; allowed templates: {allowed}")
-    dest_rel, dest_path = _scratch_markdown_file(dest)
-    src_rel, src_path = _scratch_markdown_file(source)
-    if dest_path.exists():
-        raise FileExistsError(f"Destination already exists: {dest_rel.as_posix()}")
-    if not src_path.is_file():
-        raise FileNotFoundError(f"Template not found: {src_rel.as_posix()}")
-    dest_path.parent.mkdir(parents=True, exist_ok=True)
-    dest_path.write_text(src_path.read_text(encoding="utf-8"), encoding="utf-8")
-    return {"ok": True, "source": src_rel.as_posix(), "dest": dest_rel.as_posix()}
-
-
-async def scratch_init() -> dict[str, Any]:
-    """Create scratch/_session.md and scratch/_bottlenecks.md from shipped templates."""
-
-    created: list[str] = []
-    skipped: list[str] = []
-    for source, dest in (
-        (SCRATCH_SESSION_TEMPLATE, SCRATCH_SESSION_PATH),
-        (SCRATCH_BOTTLENECK_TEMPLATE, SCRATCH_BOTTLENECK_PATH),
-    ):
-        dest_rel, dest_path = _scratch_markdown_file(dest)
-        if dest_path.exists():
-            skipped.append(dest_rel.as_posix())
-            continue
-        copied = await scratch_copy_file(dest, source)
-        created.append(copied["dest"])
-    return {"ok": True, "created": created, "skipped": skipped}
-
-
 async def scratch_read(path: str, max_chars: int = 4000) -> dict[str, Any]:
     """Read a bounded scratch .md or .py artifact."""
 
@@ -1044,8 +989,21 @@ async def scratch_replace_snippet(
     return {"ok": True, "path": relative.as_posix(), "replaced": True}
 
 
+def _has_cell_markers(source: str) -> bool:
+    return any(line.strip().startswith("# %%") for line in source.splitlines())
+
+
 def _split_script_into_cells(source: str) -> list[tuple[str, str]]:
-    """Split a .py script on # %% markers into (cell_type, content) pairs."""
+    """Split a .py script into (cell_type, content) pairs.
+
+    With ``# %%`` / ``# %% [markdown]`` markers, split into multiple cells.
+    Without markers, treat the whole file as one code cell.
+    """
+    if not source.strip():
+        return []
+    if not _has_cell_markers(source):
+        return [("code", source.strip())]
+
     cells: list[tuple[str, str]] = []
     current_type = "code"
     current_lines: list[str] = []
@@ -1072,6 +1030,9 @@ def _split_script_into_cells(source: str) -> list[tuple[str, str]]:
     return [cell for cell in cells if cell[1]]
 
 
+_SCRATCH_TO_NOTEBOOK_HINT = "Next: open-file and notebook-outline on the notebook path."
+
+
 async def scratch_to_notebook(
     script_path: str,
     notebook_path: str,
@@ -1089,7 +1050,9 @@ async def scratch_to_notebook(
     source = script_file.read_text(encoding="utf-8")
     cells = _split_script_into_cells(source)
     if not cells:
-        raise ValueError("Script has no transferable cells; add # %% section markers.")
+        raise ValueError(
+            "Script is empty; write code first, or add # %% section markers to split cells."
+        )
 
     source_marker = _scratch_source_marker(script_rel, script_file)
 
@@ -1102,6 +1065,7 @@ async def scratch_to_notebook(
                 "notebook": nb_rel.as_posix(),
                 "cell_count": len(data["cells"]),
                 "deduplicated": True,
+                "hint": _SCRATCH_TO_NOTEBOOK_HINT,
             }
     else:
         data = _new_notebook("python3")
@@ -1126,17 +1090,8 @@ async def scratch_to_notebook(
         "script": script_rel.as_posix(),
         "notebook": nb_rel.as_posix(),
         "cell_count": len(data["cells"]),
+        "hint": _SCRATCH_TO_NOTEBOOK_HINT,
     }
-
-
-def _scratch_markdown_file(path: str) -> tuple[PurePosixPath, Path]:
-    relative = _workspace_relative_path(path)
-    if not relative.as_posix().startswith("scratch/"):
-        raise ValueError("Scratch markdown paths must stay under scratch/.")
-    if not str(relative).endswith(".md"):
-        raise ValueError("Scratch markdown file must end with .md.")
-    file_path = _workspace_root() / relative
-    return relative, file_path
 
 
 def _scratch_read_path(path: str) -> tuple[Path, Path]:
@@ -1196,53 +1151,3 @@ async def scratch_list() -> dict[str, Any]:
         },
         list_keys=("items",),
     )
-
-
-def _escape_table_cell(value: str) -> str:
-    return value.replace("|", "\\|").replace("\n", " ").strip()
-
-
-async def scratch_log_bottleneck(
-    step: str,
-    status: str,
-    blocker: str,
-    note: str,
-) -> dict[str, Any]:
-    """Append one bottleneck row to scratch/_bottlenecks.md."""
-
-    for label, value, limit in (
-        ("step", step, MAX_SCRATCH_BOTTLENECK_FIELD),
-        ("status", status, MAX_SCRATCH_BOTTLENECK_FIELD),
-        ("blocker", blocker, MAX_SCRATCH_BOTTLENECK_FIELD),
-        ("note", note, MAX_SCRATCH_BOTTLENECK_NOTE),
-    ):
-        text = str(value or "").strip()
-        if not text:
-            raise ValueError(f"{label} is required.")
-        if len(text) > limit:
-            raise ValueError(f"{label} exceeds {limit} characters.")
-
-    relative, file_path = _scratch_markdown_file(SCRATCH_BOTTLENECK_PATH)
-    if not file_path.exists():
-        template_rel, template_path = _scratch_markdown_file(SCRATCH_BOTTLENECK_TEMPLATE)
-        if not template_path.is_file():
-            raise FileNotFoundError(f"Bottleneck template not found: {template_rel.as_posix()}")
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(template_path.read_text(encoding="utf-8"), encoding="utf-8")
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    row = (
-        f"| {timestamp} | {_escape_table_cell(step)} | {_escape_table_cell(status)} | "
-        f"{_escape_table_cell(blocker)} | {_escape_table_cell(note)} |\n"
-    )
-    with file_path.open("a", encoding="utf-8") as handle:
-        handle.write(row)
-
-    return {
-        "ok": True,
-        "path": relative.as_posix(),
-        "appended": True,
-        "step": step,
-        "status": status,
-        "blocker": blocker,
-    }

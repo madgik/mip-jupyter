@@ -409,81 +409,22 @@ class TestJupyterMcpTools(unittest.TestCase):
         analysis = next(item for item in result["items"] if item["path"] == "scratch/analysis.py")
         self.assertIn("Audit script", analysis["first_line"])
 
-    def test_scratch_log_bottleneck_creates_from_template(self):
-        tmp, workspace = self._workspace()
-        self.addCleanup(tmp.cleanup)
-        repo = Path(__file__).resolve().parents[2]
-        scratch = workspace / "scratch"
-        scratch.mkdir(parents=True, exist_ok=True)
-        template = repo / "workspace" / "templates" / "scratch" / "_bottlenecks.template.md"
-        (scratch / "_bottlenecks.template.md").write_text(
-            template.read_text(encoding="utf-8"),
-            encoding="utf-8",
-        )
-
-        with patch.dict(os.environ, {"MIP_JUPYTER_ROOT": str(workspace)}):
-            result = run(
-                tools.scratch_log_bottleneck(
-                    step="preflight",
-                    status="ok",
-                    blocker="none",
-                    note="SSR coverage passed",
-                )
-            )
-
-        self.assertTrue(result["ok"])
-        bottlenecks = (scratch / "_bottlenecks.md").read_text(encoding="utf-8")
-        self.assertIn("| preflight | ok | none | SSR coverage passed |", bottlenecks)
-
     def test_cell_write_cap_rejects_oversized_content(self):
         with self.assertRaises(ValueError):
             tools._validate_cell_content("x" * (tools.MAX_CELL_WRITE_CHARS + 1))
 
-    def test_scratch_init_creates_session_and_bottleneck_files(self):
+    def test_scratch_read_md_file(self):
         tmp, workspace = self._workspace()
         self.addCleanup(tmp.cleanup)
-        repo = Path(__file__).resolve().parents[2]
         scratch = workspace / "scratch"
         scratch.mkdir(parents=True, exist_ok=True)
-        for name in ("_session.template.md", "_bottlenecks.template.md"):
-            src = repo / "workspace" / "templates" / "scratch" / name
-            (scratch / name).write_text(src.read_text(encoding="utf-8"), encoding="utf-8")
+        (scratch / "notes.md").write_text("# Notes\nhello\n", encoding="utf-8")
 
         with patch.dict(os.environ, {"MIP_JUPYTER_ROOT": str(workspace)}):
-            result = run(tools.scratch_init())
-            skipped = run(tools.scratch_init())
+            read_back = run(tools.scratch_read("scratch/notes.md", max_chars=200))
 
-        self.assertTrue(result["ok"])
-        self.assertIn("scratch/_session.md", result["created"])
-        self.assertIn("scratch/_bottlenecks.md", result["created"])
-        self.assertTrue((scratch / "_session.md").is_file())
-        self.assertTrue((scratch / "_bottlenecks.md").is_file())
-        self.assertEqual(skipped["skipped"], ["scratch/_session.md", "scratch/_bottlenecks.md"])
-
-    def test_scratch_copy_file_and_read(self):
-        tmp, workspace = self._workspace()
-        self.addCleanup(tmp.cleanup)
-        repo = Path(__file__).resolve().parents[2]
-        scratch = workspace / "scratch"
-        scratch.mkdir(parents=True, exist_ok=True)
-        template = repo / "workspace" / "templates" / "scratch" / "_session.template.md"
-        (scratch / "_session.template.md").write_text(
-            template.read_text(encoding="utf-8"),
-            encoding="utf-8",
-        )
-
-        with patch.dict(os.environ, {"MIP_JUPYTER_ROOT": str(workspace)}):
-            copied = run(
-                tools.scratch_copy_file(
-                    "scratch/_session.md",
-                    "scratch/_session.template.md",
-                )
-            )
-            read_back = run(tools.scratch_read("scratch/_session.md", max_chars=200))
-
-        self.assertTrue(copied["ok"])
         self.assertTrue(read_back["ok"])
-        self.assertIn("Exploration session", read_back["content"])
+        self.assertIn("Notes", read_back["content"])
 
     def test_scratch_append_lines_deduplicates_identical_chunk(self):
         tmp, workspace = self._workspace()
@@ -538,6 +479,65 @@ class TestJupyterMcpTools(unittest.TestCase):
         self.assertTrue(first["ok"])
         self.assertTrue(second.get("deduplicated"))
         self.assertEqual(first["cell_count"], second["cell_count"])
+        self.assertIn("open-file", first.get("hint", ""))
+        self.assertIn("open-file", second.get("hint", ""))
+
+    def test_scratch_to_notebook_unmarked_script_is_one_code_cell(self):
+        tmp, workspace = self._workspace()
+        self.addCleanup(tmp.cleanup)
+        scratch = workspace / "scratch"
+        scratch.mkdir(parents=True, exist_ok=True)
+        (scratch / "plain.py").write_text(
+            "from __future__ import annotations\n\nx = 1\nprint(x)\n",
+            encoding="utf-8",
+        )
+
+        with patch.dict(os.environ, {"MIP_JUPYTER_ROOT": str(workspace)}):
+            result = run(
+                tools.scratch_to_notebook(
+                    "scratch/plain.py",
+                    "scratch/plain.ipynb",
+                    title="Plain script",
+                )
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["script"], "scratch/plain.py")
+        self.assertEqual(result["notebook"], "scratch/plain.ipynb")
+        self.assertEqual(result["cell_count"], 2)  # title markdown + one code cell
+        self.assertIn("notebook-outline", result["hint"])
+        nb = json.loads((scratch / "plain.ipynb").read_text(encoding="utf-8"))
+        self.assertEqual(nb["cells"][0]["cell_type"], "markdown")
+        self.assertEqual(nb["cells"][1]["cell_type"], "code")
+        self.assertIn("x = 1", "".join(nb["cells"][1]["source"]))
+
+    def test_scratch_to_notebook_splits_on_cell_markers(self):
+        tmp, workspace = self._workspace()
+        self.addCleanup(tmp.cleanup)
+        scratch = workspace / "scratch"
+        scratch.mkdir(parents=True, exist_ok=True)
+        (scratch / "marked.py").write_text(
+            "# %% [markdown]\n# # Intro\n\n# %%\na = 1\n\n# %%\nb = 2\n",
+            encoding="utf-8",
+        )
+
+        with patch.dict(os.environ, {"MIP_JUPYTER_ROOT": str(workspace)}):
+            result = run(
+                tools.scratch_to_notebook(
+                    "scratch/marked.py",
+                    "scratch/marked.ipynb",
+                )
+            )
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["cell_count"], 3)
+        self.assertIn("open-file", result["hint"])
+        nb = json.loads((scratch / "marked.ipynb").read_text(encoding="utf-8"))
+        types = [cell["cell_type"] for cell in nb["cells"]]
+        self.assertEqual(types, ["markdown", "code", "code"])
+        self.assertIn("Intro", "".join(nb["cells"][0]["source"]))
+        self.assertIn("a = 1", "".join(nb["cells"][1]["source"]))
+        self.assertIn("b = 2", "".join(nb["cells"][2]["source"]))
 
     def test_run_cell_executes_prerequisite_code_cells(self):
         try:

@@ -1,4 +1,4 @@
-# Agent Exploration — Bottleneck Tracking
+# Agent Exploration
 
 **Read when:** Multi-step exploration, catalog audit, or novel stroke analysis with Cohort Scout.
 
@@ -6,48 +6,33 @@
 
 Use `CODEX_REASONING_EFFORT=medium` for this workflow if the default is `low`.
 
-## Turn 1 setup (mandatory)
+Skip this page for a single small notebook tweak — use direct notebook tools
+(`create-notebook` / `append-*` / `edit-cell`) per `04-jupyter-mcp.md`.
 
-1. `read-guide --page agent-exploration` (this page)
-2. `scratch-list` — resume existing artifacts before creating new scripts
-3. `scratch-init` (or `scratch-copy-file` for individual templates)
-4. Fill objective and primary hypothesis in `_session.md`
+## Direct notebook vs scratch first
+
+| Choose | When |
+|--------|------|
+| **Direct notebook** | Markdown, one small code cell, outline/read, rename/create empty notebook, fix one cell |
+| **Scratch first** | Multi-step MIP client work, federated algorithms, script validation before user-facing cells |
+| **Always after scratch** | `python scratch/<name>.py` (exit 0) → `scratch-to-notebook` → `open-file` / `notebook-outline` |
+
+## Turn 1 setup
+
+1. `jupyter-mcp read-guide --page agent-exploration` (this page)
+2. `jupyter-mcp scratch-list` — resume existing artifacts before creating new scripts
 
 ## Phased workflow
 
 | Phase | Action |
 |-------|--------|
-| **A — Discovery** | `mip-env-status`, `mip-data-model-summary stroke --version 3.7`, `python scratch/stroke_preflight.py` |
-| **B — Catalog audit** | `mip-algorithm-summary`, `read-guide --page 07-pipeline-algorithms`; signatures from `examples/algorithm_examples.py` |
-| **C — Novel analysis** | `scratch-copy-template scratch/<name>.py --source examples/algorithm_examples.py`, trim to one hypothesis, small edits, run script |
-| **D — Notebook** | `scratch-to-notebook`, `notebook-outline`, `open-file` |
+| **A — Discovery** | `jupyter-mcp mip-env-status`, `mip-data-model-summary stroke --version 3.7`, `python scratch/stroke_preflight.py` |
+| **B — Catalog audit** | `jupyter-mcp mip-algorithm-summary`, `jupyter-mcp read-guide --page 07-pipeline-algorithms`; signatures from `examples/algorithm_examples.py` |
+| **C — Novel analysis** | `jupyter-mcp scratch-copy-template scratch/<name>.py --source examples/algorithm_examples.py`, trim to one hypothesis, small edits, **`python scratch/<name>.py`** until exit 0 |
+| **D — Notebook** | `jupyter-mcp scratch-to-notebook`, `notebook-outline`, `open-file` |
 
 Do **not** stop after Phase B metadata alone. Complete Phase C unless preflight fails.
-
-## Bottleneck logging
-
-Log at **phase boundaries**, on **failures**, and when you **skip** a planned step —
-not after every successful tool call.
-
-```bash
-python -m mip_jupyter_dev.jupyter_mcp_cli scratch-log-bottleneck STEP STATUS BLOCKER "note"
-```
-
-| Field | Values |
-|-------|--------|
-| **status** | `ok`, `failed`, `skipped`, `investigate` |
-| **blocker** | `wrong_api`, `not_wrapped`, `platform_error`, `missing_variable`, `empty_cohort`, `tool_limit`, `agent_tooling`, or `-` |
-
-Log **full** error messages in `note` — never truncate platform errors.
-
-## Blocker taxonomy
-
-- **wrong_api** — `TypeError` from wrong kwargs; fix via `examples/algorithm_examples.py`
-- **not_wrapped** — method not in `pipeline.available_algorithms()` (30 methods)
-- **platform_error** — experiment `status='error'`
-- **missing_variable** / **empty_cohort** — SSR data or filter issue
-- **tool_limit** — payload too large; split scratch edits
-- **agent_tooling** — MCP or shell guard rejection
+Do **not** stop at a verified `.py` alone — finish Phase D unless the user asked for a script only.
 
 ## Resume after tool-call error
 
@@ -62,16 +47,15 @@ Do not invent methods or sklearn-style `x=`/`y=` kwargs.
 ## Deliverables (session end)
 
 1. Runnable `scratch/<name>.py` and optional `.ipynb`
-2. Updated `scratch/_bottlenecks.md`
-3. Chat summary: primary OR (95% CI) if logistic run, top bottlenecks, next human fix
+2. Chat summary: primary OR (95% CI) if logistic run, next human fix
 
 ## Starter prompt (user paste)
 
 ```text
-Exploration on Stroke 3.7 / SSR. Turn 1: scratch-init + scratch-list.
-Phases A–D. Log bottlenecks at phase ends and on failures.
+Exploration on Stroke 3.7 / SSR. Turn 1: scratch-list.
+Phases A–D.
 Novel work: copy from examples/algorithm_examples.py.
-End with OR (95% CI), top bottlenecks, next action.
+End with OR (95% CI) and next action.
 ```
 
 **Next file:** [`recipes/stroke-analysis.md`](recipes/stroke-analysis.md) for novel inference rules.

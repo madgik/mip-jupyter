@@ -1,14 +1,25 @@
 .git
 .codegraph
+
+# Virtualenvs (be explicit — nested client .venv is ~290MB)
 .venv
+.venv/
+**/.venv
+**/.venv/
 venv
+**/venv
+**/venv/
 env
 ENV
+
 __pycache__
+**/__pycache__
 *.py[cod]
 *.pyo
 .pytest_cache
+**/.pytest_cache
 .ruff_cache
+**/.ruff_cache
 .mypy_cache
 .coverage
 coverage.xml
@@ -19,8 +30,11 @@ htmlcov
 build
 dist
 *.egg-info
+**/*.egg-info
 pip-wheel-metadata
 .ipynb_checkpoints
+**/.ipynb_checkpoints
+
 .env
 .env.*
 .mip_token
@@ -35,3 +49,7 @@ mip_token
 .DS_Store
 Thumbs.db
 untitled.chat
+
+# Lockfiles are not needed inside the image build context for uv pip install .
+uv.lock
+**/uv.lock
