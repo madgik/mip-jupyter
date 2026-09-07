@@ -12,8 +12,8 @@ Self-contained for stroke stats — do not chain `02`/`03`/`04` on startup.
 2. `jupyter-mcp mip-data-model-summary stroke --version 3.7`
 3. `python scratch/stroke_preflight.py` — **stop** if required vars fail
 4. Pre-specify one primary hypothesis (outcome, predictors, SSR-only)
-5. `jupyter-mcp scratch-copy-template scratch/<name>.py --source examples/algorithm_examples.py`
-6. Trim/edit with `jupyter-mcp scratch-append-lines` / `scratch-replace-snippet` only
+5. `jupyter-mcp scratch-write-file scratch/<name>.py` — the whole analysis, `# %%` cell markers, one arg per line (or `--content-file`)
+6. Fix with `jupyter-mcp scratch-replace-snippet` (or rewrite the file); no per-cell fragments
 7. `python scratch/<name>.py`; save CSVs under `scratch/`
 8. `jupyter-mcp scratch-to-notebook` → `notebook-outline` → `open-file`
 9. Primary report: **adjusted logistic OR (95% CI)**; secondary p-values exploratory
@@ -54,4 +54,4 @@ multiplicity. No `inputdata()` / `to_frame()` / sklearn on rows.
 Heredocs / `write_stdin` / shell file writes; `new_columns=[creator.variable]`;
 ending with CSVs only — always transfer to `scratch/<name>.ipynb`.
 
-**Next:** `scratch-copy-template` after preflight passes.
+**Next:** `scratch-write-file` the ONE analysis script after preflight passes.

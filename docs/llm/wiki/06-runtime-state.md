@@ -63,7 +63,7 @@ For simple notebook edits, inspect the outline or relevant cells, edit only requ
 
 For long MIP/Jupyter/statistical workflows, use `analysis-long` mode and track data model, dataset IDs, variable IDs, filters, cohort definition, pipeline, experiment ID, polling status, notebook path, affected cells, execution status, and summarized results.
 
-After compaction or handoff, **resume from existing artifacts** (`scratch/stroke_preflight.py`, `scratch/<name>.py`, output CSVs, `scratch/*.ipynb`) with bounded reads. Do not regenerate large scripts via heredocs or `write_stdin`. For novel stroke work, use `scratch-copy-template --source examples/algorithm_examples.py` if no scratch script exists yet. After a verified script run, transfer to notebook with `scratch-to-notebook`. Refresh workflow detail with `read-guide --page recipes/stroke-analysis --topic "novel"` when needed.
+After compaction or handoff, **resume from existing artifacts** (`scratch/stroke_preflight.py`, `scratch/<name>.py`, output CSVs, `scratch/*.ipynb`) with bounded reads. Do not regenerate large scripts via heredocs or `write_stdin`. For novel stroke work, write the ONE `scratch/<name>.py` with `scratch-write-file` if no scratch script exists yet. After a verified script run, transfer to notebook with `scratch-to-notebook`. Refresh workflow detail with `read-guide --page recipes/stroke-analysis --topic "novel"` when needed.
 
 Never store secrets, token values, private connection strings, raw private data, or full sensitive notebook outputs in `.llm/`.
 

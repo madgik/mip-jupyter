@@ -7,16 +7,11 @@ client). Stay in this repository unless the user explicitly changes scope.
 
 ## Startup
 
-1. This file is already loaded; do not reread it.
-2. For IDE work: open **one** routed page from [docs/llm/INDEX.md](docs/llm/INDEX.md)
-   (skip INDEX when intent is obvious).
-3. Production Cohort Scout uses catalog `base_instructions` + one
-   `read-guide --page PAGE [--topic …]` — do not chain AGENTS → INDEX → 00.
-4. After compaction/handoff only: `06-runtime-state.md` + minimal `.llm/` state.
-5. Open source or notebooks only when the selected page points you there.
+1. After compaction/handoff only: `06-runtime-state.md` + minimal `.llm/` state.
+2. Open source or notebooks only when the selected page points there.
 
-No full-repo `find`, `grep`, or tree listing on startup. Use `rg` only after the
-routed page.
+No full-repo `find`, `grep`, or tree listing on startup. Route to one wiki page
+([docs/llm/INDEX.md](docs/llm/INDEX.md)) first; only then use `rg`.
 
 ## Hard guardrails
 
