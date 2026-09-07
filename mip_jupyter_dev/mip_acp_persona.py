@@ -27,7 +27,7 @@ TOOL_CALL_PARSE_ERROR_MESSAGE = (
     "\n\nThis usually happens when a long code payload is sent in one tool call and "
     "the model returns invalid JSON. Your notebook and MIP connection are fine."
     "\n\nStart a **new chat** and resume from existing `scratch/*.py` artifacts with "
-    "smaller steps (`scratch-list`, then `scratch-copy-template`, `scratch-append-lines`, "
+    "smaller steps (`scratch-list`, then `scratch-write-file` or "
     "`scratch-replace-snippet`). Continue the newest complete script in scratch/. "
     "Do not retry write commands without `scratch-list` or "
     "`notebook-outline` first. Do not retry heredocs or large shell writes."

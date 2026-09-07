@@ -13,7 +13,6 @@ from mip_jupyter_dev import notebook as notebook_runner
 from mip_jupyter_dev.codex_bootstrap import (
     BASE_INSTRUCTIONS_MAX_CHARS,
     DEFAULT_CODEX_MODEL,
-    DEFAULT_CODEX_MODELS,
     DEFAULT_CODEX_PERSONA_ID,
     DEFAULT_CODEX_REASONING_EFFORT,
     MCP_CLI_RULES,
@@ -47,7 +46,9 @@ from mip_jupyter_dev import jupyter_mcp_cli
 @pytest.fixture(autouse=True)
 def _clear_codex_env(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in (
+        "CODEX_VLLM_BASE_URL",
         "CODEX_VLLM_MODEL",
+        "CODEX_VLLM_PROVIDER",
         "CODEX_REASONING_EFFORT",
         "CODEX_MODEL_CONTEXT_WINDOW",
         "CODEX_AUTO_COMPACT_TOKEN_LIMIT",
@@ -57,18 +58,13 @@ def _clear_codex_env(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(name, raising=False)
 
 
-def test_catalog_defaults_to_qwen_only() -> None:
-    assert DEFAULT_CODEX_MODELS == ("qwen36-nvfp4",)
-
-
-def test_from_env_default_model_is_qwen() -> None:
+def test_from_env_default_model_is_served_id() -> None:
     settings = CodexSettings.from_env()
-    assert settings.model == DEFAULT_CODEX_MODEL
-    assert settings.model == "qwen36-nvfp4"
+    assert settings.base_url == "http://195.251.63.150:8888/v1"
+    assert settings.model == "RadixArk/Qwen3.8-Flash-Next-NVFP4"
+    assert settings.catalog_models == ("RadixArk/Qwen3.8-Flash-Next-NVFP4",)
     assert settings.context_window == 131072
-    assert settings.auto_compact_limit == 112000
-    assert settings.catalog_models == ("qwen36-nvfp4",)
-    assert settings.reasoning_effort == DEFAULT_CODEX_REASONING_EFFORT
+    assert settings.auto_compact_limit == 40000
     assert settings.reasoning_effort == "low"
     assert not settings.enable_native_jupyter_mcp
 
@@ -79,9 +75,41 @@ def test_native_mcp_can_be_enabled_by_environment(monkeypatch: pytest.MonkeyPatc
     assert settings.enable_native_jupyter_mcp
 
 
-def test_from_env_invalid_model_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("CODEX_VLLM_MODEL", "other-model")
-    with pytest.raises(ValueError, match="must be one of"):
+def test_env_budget_overrides_apply_to_catalog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_VLLM_MODEL", "acme/Brand-New-Model")
+    monkeypatch.setenv("CODEX_MODEL_CONTEXT_WINDOW", "65536")
+    monkeypatch.setenv("CODEX_AUTO_COMPACT_TOKEN_LIMIT", "50000")
+    settings = CodexSettings.from_env()
+    assert settings.context_window == 65536
+    assert settings.auto_compact_limit == 50000
+
+    catalog_path = tmp_path / "model-catalog.json"
+    write_codex_model_catalog(catalog_path, settings)
+
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    assert len(catalog["models"]) == 1
+    entry = catalog["models"][0]
+    assert entry["slug"] == "acme/Brand-New-Model"
+    assert entry["display_name"] == "acme/Brand-New-Model"
+    assert entry["context_window"] == 65536
+
+
+def test_base_url_is_normalized_and_catalog_pins_active_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_VLLM_BASE_URL", "http://10.0.0.5:8000/v1/")
+    settings = CodexSettings.from_env()
+
+    assert settings.base_url == "http://10.0.0.5:8000/v1"
+    assert settings.catalog_models == (DEFAULT_CODEX_MODEL,)
+
+
+def test_invalid_base_url_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CODEX_VLLM_BASE_URL", "   ")
+    with pytest.raises(ValueError, match="CODEX_VLLM_BASE_URL"):
         CodexSettings.from_env()
 
 
@@ -91,38 +119,38 @@ def test_from_env_invalid_reasoning_effort_raises(monkeypatch: pytest.MonkeyPatc
         CodexSettings.from_env()
 
 
-def test_model_catalog_contains_qwen_model_only(tmp_path: Path) -> None:
+def test_model_catalog_contains_single_served_model(tmp_path: Path) -> None:
     settings = CodexSettings.from_env()
     catalog_path = tmp_path / "model-catalog.json"
     write_codex_model_catalog(catalog_path, settings)
 
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     slugs = [entry["slug"] for entry in catalog["models"]]
-    assert slugs == ["qwen36-nvfp4"]
+    assert slugs == ["RadixArk/Qwen3.8-Flash-Next-NVFP4"]
 
-    qwen = catalog["models"][0]
-    assert qwen["context_window"] == 131072
-    assert qwen["default_reasoning_level"] == "low"
-    assert {level["effort"] for level in qwen["supported_reasoning_levels"]} == {
+    model = catalog["models"][0]
+    assert model["context_window"] == 131072
+    assert model["default_reasoning_level"] == "low"
+    assert {level["effort"] for level in model["supported_reasoning_levels"]} == {
         "minimal",
         "low",
         "medium",
     }
-    assert "recipes/stroke-analysis" in qwen["base_instructions"]
-    assert "--topic" in qwen["base_instructions"]
-    assert "skip AGENTS" in qwen["base_instructions"]
-    assert SCOPE_RULES in qwen["base_instructions"]
-    assert MCP_CLI_RULES in qwen["base_instructions"]
-    assert TOOL_PAYLOAD_RULES in qwen["base_instructions"]
-    assert PRIVACY_RULES in qwen["base_instructions"]
-    assert ROUTING_RULES in qwen["base_instructions"]
-    assert "available_algorithms" not in qwen["base_instructions"]
-    assert "stroke_preflight" not in qwen["base_instructions"]
-    assert "write_stdin" in qwen["base_instructions"]
-    assert "Subcommands:" not in qwen["base_instructions"]
-    assert "never call native mcp__* tools" in qwen["base_instructions"]
-    assert "never retry writes" in qwen["base_instructions"]
-    assert len(qwen["base_instructions"]) <= BASE_INSTRUCTIONS_MAX_CHARS
+    assert "recipes/stroke-analysis" in model["base_instructions"]
+    assert "--topic" in model["base_instructions"]
+    assert "skip AGENTS" in model["base_instructions"]
+    assert SCOPE_RULES in model["base_instructions"]
+    assert MCP_CLI_RULES in model["base_instructions"]
+    assert TOOL_PAYLOAD_RULES in model["base_instructions"]
+    assert PRIVACY_RULES in model["base_instructions"]
+    assert ROUTING_RULES in model["base_instructions"]
+    assert "available_algorithms" not in model["base_instructions"]
+    assert "stroke_preflight" not in model["base_instructions"]
+    assert "write_stdin" in model["base_instructions"]
+    assert "Subcommands:" not in model["base_instructions"]
+    assert "never native mcp__*" in model["base_instructions"]
+    assert "never retry writes" in model["base_instructions"]
+    assert len(model["base_instructions"]) <= BASE_INSTRUCTIONS_MAX_CHARS
     assert len(build_base_instructions()) <= BASE_INSTRUCTIONS_MAX_CHARS
 
 
@@ -135,10 +163,10 @@ def test_native_model_instructions_allow_native_mcp(tmp_path: Path) -> None:
     instructions = catalog["models"][0]["base_instructions"]
     assert NATIVE_MCP_RULES in instructions
     assert MCP_CLI_RULES not in instructions
-    assert "never call native mcp__* tools" not in instructions
+    assert "never native mcp__*" not in instructions
 
 
-def test_config_toml_uses_default_qwen_model(tmp_path: Path) -> None:
+def test_config_toml_uses_default_served_model(tmp_path: Path) -> None:
     settings = CodexSettings.from_env()
     catalog_path = tmp_path / "model-catalog.json"
     config_path = tmp_path / "config.toml"
@@ -146,9 +174,9 @@ def test_config_toml_uses_default_qwen_model(tmp_path: Path) -> None:
     write_codex_config(config_path, settings, catalog_path)
 
     config = config_path.read_text(encoding="utf-8")
-    assert 'model = "qwen36-nvfp4"' in config
+    assert 'model = "RadixArk/Qwen3.8-Flash-Next-NVFP4"' in config
     assert "model_context_window = 131072" in config
-    assert "model_auto_compact_token_limit = 112000" in config
+    assert "model_auto_compact_token_limit = 40000" in config
     assert 'model_reasoning_effort = "low"' in config
     assert '[mcp_servers."Jupyter MCP Server"]' not in config
 
@@ -196,10 +224,40 @@ def test_notebook_cli_context_overrides_are_used() -> None:
 
     settings = notebook_runner._codex_settings_from_args(args)
 
-    assert settings.model == "qwen36-nvfp4"
-    assert settings.catalog_models == ("qwen36-nvfp4",)
+    assert settings.model == "RadixArk/Qwen3.8-Flash-Next-NVFP4"
+    assert settings.catalog_models == ("RadixArk/Qwen3.8-Flash-Next-NVFP4",)
     assert settings.context_window == 4096
     assert settings.auto_compact_limit == 3500
+
+
+def test_notebook_cli_codex_model_and_url_flags_are_used() -> None:
+    args = notebook_runner._parser().parse_args(
+        [
+            "--codex-base-url",
+            "http://127.0.0.1:8001/v1/",
+            "--codex-model",
+            "acme/Brand-New-Model",
+        ]
+    )
+
+    settings = notebook_runner._codex_settings_from_args(args)
+
+    assert settings.base_url == "http://127.0.0.1:8001/v1"
+    assert settings.model == "acme/Brand-New-Model"
+    assert settings.catalog_models == ("acme/Brand-New-Model",)
+
+
+def test_notebook_cli_defaults_honor_env_budgets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CODEX_MODEL_CONTEXT_WINDOW", "65536")
+    monkeypatch.setenv("CODEX_AUTO_COMPACT_TOKEN_LIMIT", "30000")
+
+    args = notebook_runner._parser().parse_args([])
+
+    settings = notebook_runner._codex_settings_from_args(args)
+    assert settings.context_window == 65536
+    assert settings.auto_compact_limit == 30000
 
 
 def test_sanitize_path_drops_error_text_and_keeps_essentials() -> None:
@@ -260,7 +318,7 @@ async def test_cohort_scout_handle_tool_call_parse_error_sends_user_message() ->
 
 def test_tool_call_parse_error_message_mentions_small_steps() -> None:
     assert "new chat" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
-    assert "scratch-copy-template" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
+    assert "scratch-write-file" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
     assert "scratch-list" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
     assert "notebook-outline" in TOOL_CALL_PARSE_ERROR_MESSAGE.lower()
 
@@ -289,7 +347,7 @@ def test_bootstrap_codex_writes_catalog_and_config(tmp_path: Path) -> None:
 
     catalog = json.loads((codex_home / "model-catalog.json").read_text(encoding="utf-8"))
     assert len(catalog["models"]) == 1
-    assert catalog["models"][0]["slug"] == "qwen36-nvfp4"
+    assert catalog["models"][0]["slug"] == "RadixArk/Qwen3.8-Flash-Next-NVFP4"
     assert MIP_PERSONA_NAME in catalog["models"][0]["base_instructions"]
     assert (codex_home / "config.toml").is_file()
     jupyter_mcp_wrapper = codex_home / "bin" / "jupyter-mcp"

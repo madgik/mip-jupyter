@@ -17,6 +17,7 @@ from urllib.request import urlopen
 
 from .codex_bootstrap import BASE_INSTRUCTIONS_MAX_CHARS
 from .codex_bootstrap import DEFAULT_CODEX_MODEL
+from .codex_bootstrap import ENV_CODEX_MODEL
 from .codex_bootstrap import build_base_instructions
 from . import jupyter_mcp_tools as tools
 
@@ -289,7 +290,10 @@ def main(argv: list[str] | None = None) -> int:
             report["vllm"] = {"ok": False, "error": "CODEX_VLLM_BASE_URL unset"}
             report["ok"] = False
         else:
-            report["vllm"] = optional_vllm_ttft(base_url=base_url)
+            report["vllm"] = optional_vllm_ttft(
+                base_url=base_url,
+                model=os.getenv(ENV_CODEX_MODEL, DEFAULT_CODEX_MODEL),
+            )
             report["ok"] = bool(report["ok"] and report["vllm"]["ok"])
 
     if args.json:

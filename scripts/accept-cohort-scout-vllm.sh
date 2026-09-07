@@ -3,14 +3,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-BASE_URL="${CODEX_VLLM_BASE_URL:-http://100.92.46.71:8001/v1}"
-MODEL="${CODEX_VLLM_MODEL:-qwen36-nvfp4}"
+BASE_URL="${CODEX_VLLM_BASE_URL:-http://195.251.63.150:8888/v1}"
+MODEL="${CODEX_VLLM_MODEL:-RadixArk/Qwen3.8-Flash-Next-NVFP4}"
+BASE_URL="${BASE_URL%/}"   # paths are appended below
 
 echo "Checking vLLM models at ${BASE_URL}..."
 curl -fsS "${BASE_URL}/models" | grep -q "${MODEL}"
 
 echo "Checking Responses API..."
-# Qwen may emit a reasoning block before the final message; keep headroom.
+# The served model may emit a reasoning block before the final message; keep headroom.
 curl -fsS "${BASE_URL}/responses" \
   -H 'Content-Type: application/json' \
   -d "{\"model\":\"${MODEL}\",\"input\":\"Reply with OK only.\",\"max_output_tokens\":2048}" \

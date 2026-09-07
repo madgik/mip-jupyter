@@ -6,6 +6,10 @@ IMAGE="${1:?Usage: $0 <image:tag>}"
 CONTAINER="mip-jupyter-smoke-$$"
 TOKEN="${SMOKE_TOKEN:-smoke}"
 PORT="${SMOKE_PORT:-8888}"
+# The bootstrap only needs a syntactically valid URL; port 9 (discard) keeps the
+# smoke test independent of a live inference endpoint.
+CODEX_URL="${SMOKE_CODEX_VLLM_BASE_URL:-http://127.0.0.1:9/v1}"
+CODEX_MODEL="${CODEX_VLLM_MODEL:-RadixArk/Qwen3.8-Flash-Next-NVFP4}"
 
 cleanup() {
   docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true
@@ -14,8 +18,8 @@ trap cleanup EXIT
 
 docker run -d --name "${CONTAINER}" -p "${PORT}:8888" \
   -e JUPYTER_TOKEN="${TOKEN}" \
-  -e CODEX_VLLM_BASE_URL=http://127.0.0.1:9/v1 \
-  -e CODEX_VLLM_MODEL=qwen36-nvfp4 \
+  -e CODEX_VLLM_BASE_URL="${CODEX_URL}" \
+  -e CODEX_VLLM_MODEL="${CODEX_MODEL}" \
   "${IMAGE}"
 
 echo "Waiting for Jupyter..."

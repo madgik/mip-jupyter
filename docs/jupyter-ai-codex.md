@@ -1,8 +1,8 @@
 # Jupyter AI Codex Prototype
 
-This prototype adds Jupyter AI to the local JupyterLab workflow so developers can test a vLLM-backed Codex assistant. The repository does not include personal credentials or tokens.
+This prototype adds Jupyter AI to the local JupyterLab workflow so developers can test a Codex assistant backed by a self-hosted `/v1/responses` endpoint. The repository does not include personal credentials or tokens.
 
-Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Cohort Scout at a vLLM Responses-compatible `/v1/responses` endpoint and the `qwen36-nvfp4` model.
+Jupyter AI v3 discovers ACP-compatible agents from the runtime environment. The local runner starts JupyterLab with a temporary Codex configuration that points Cohort Scout at a Responses-compatible `/v1/responses` endpoint (SGLang today) and the `RadixArk/Qwen3.8-Flash-Next-NVFP4` model.
 
 Architecture overview and Mermaid source: [jupyter-ai-architecture.md](jupyter-ai-architecture.md).
 
@@ -41,14 +41,14 @@ Install the Codex ACP adapter required by Jupyter AI:
 npm install -g @zed-industries/codex-acp
 ```
 
-The vLLM Codex workflow uses a temporary `CODEX_HOME` containing `config.toml` and `model-catalog.json`:
+The Codex workflow uses a temporary `CODEX_HOME` containing `config.toml` and `model-catalog.json`:
 
 ```toml
-model = "qwen36-nvfp4"
+model = "RadixArk/Qwen3.8-Flash-Next-NVFP4"
 model_provider = "vllm"
 model_catalog_json = "/tmp/mip-codex-home-.../model-catalog.json"
 model_context_window = 131072
-model_auto_compact_token_limit = 112000
+model_auto_compact_token_limit = 40000
 model_reasoning_effort = "low"
 model_reasoning_summary = "none"
 model_supports_reasoning_summaries = false
@@ -62,19 +62,19 @@ multi_agent = false
 
 [model_providers.vllm]
 name = "vLLM"
-base_url = "http://100.92.46.71:8001/v1"
+base_url = "http://195.251.63.150:8888/v1"
 wire_api = "responses"
 ```
 
-The generated model catalog contains only `qwen36-nvfp4` (vLLM alias for
-`nvidia/Qwen3.6-35B-A3B-NVFP4`) with a 131072-token agent context
-window (served `max_model_len` may be higher). Default reasoning effort is `low`
-for chat speed; set `CODEX_REASONING_EFFORT=medium` for multi-step exploration.
-Catalog metadata keeps the Responses payload compatible with vLLM by setting
-`support_verbosity` to `false`, `apply_patch_tool_type` to `null`, and
-`supports_parallel_tool_calls` to `false`. For Qwen, `use_responses_lite` is
-`false` so shell/function tool calls are returned (lite mode caused plain-text
-echoes instead of tool execution).
+The generated model catalog contains only
+`RadixArk/Qwen3.8-Flash-Next-NVFP4` (the SGLang served id) with a 131072-token agent
+context window (served `context_length` is 262144). Default reasoning effort is
+`low` for chat speed; set `CODEX_REASONING_EFFORT=medium` for multi-step
+exploration. Catalog metadata keeps the Responses payload compatible with the
+endpoint by setting `support_verbosity` to `false`, `apply_patch_tool_type` to
+`null`, and `supports_parallel_tool_calls` to `false`. On the Responses path,
+`use_responses_lite` is `false` so shell/function tool calls are returned (lite
+mode caused plain-text echoes instead of tool execution).
 
 The runner also prepends a generated `codex-acp` wrapper to `PATH`. The wrapper passes `-c approval_policy="never"`, `-c sandbox_mode="danger-full-access"`, and `-c shell_environment_policy.inherit="all"` directly to `codex-acp`; this is needed because the ACP process otherwise starts Codex with `on-request` approvals and a read-only sandbox even when the temporary `config.toml` contains the desired values.
 
@@ -101,13 +101,30 @@ the MCP server and the model instructions allow native MCP calls.
 
 Restart JupyterLab after installing or changing agent binaries so Jupyter AI can rediscover available agents.
 
-To use a different vLLM endpoint for local testing:
+### Point the agent at another endpoint or model
+
+Host, port, and model id are runtime configuration; none of the examples below
+need a code change or an image rebuild:
 
 ```bash
-CODEX_VLLM_BASE_URL=http://127.0.0.1:8001/v1 uv run mip-notebook
+# Remote GPU box through a tunnel (avoid local 8888: JupyterLab owns it)
+ssh -L 18000:127.0.0.1:8888 <gpu-host> &
+CODEX_VLLM_BASE_URL=http://127.0.0.1:18000/v1 ./run-local-llm-codex.sh
+
+# Different served id (env var, or the flag which wins over it)
+CODEX_VLLM_MODEL=org/Other-Model ./run-local-llm-codex.sh
+uv run mip-notebook --codex-base-url http://127.0.0.1:8001/v1 --codex-model org/Other-Model
+
+# Budgets for a served id whose context differs from the defaults
+CODEX_MODEL_CONTEXT_WINDOW=131072 CODEX_AUTO_COMPACT_TOKEN_LIMIT=40000 \
+  ./run-local-llm-codex.sh
 ```
 
-If the shell bridge regresses, native MCP forwarding should remain disabled for vLLM. Verify the MCP server directly with:
+`python -m mip_jupyter_dev.codex_bootstrap` (the container and Hub path) reads the
+same variables; Hub spawners forward them from the deployment repo. Any served id
+is accepted, and one we do not ship defaults to the budgets above.
+
+If the shell bridge regresses, native MCP forwarding should remain disabled for this endpoint. Verify the MCP server directly with:
 
 ```bash
 python -m mip_jupyter_dev.jupyter_mcp_cli notebook-outline workspace/examples/feres_analysis.ipynb
@@ -119,32 +136,32 @@ For parallel local JupyterLab instances, use a different JupyterLab port. The ru
 JUPYTER_PORT=8892 uv run mip-notebook
 ```
 
-## Check the vLLM endpoint
+## Check the inference endpoint
 
-From a machine connected to the same Tailscale network:
+From a machine that can reach the inference host:
 
 ```bash
-curl http://100.92.46.71:8001/v1/models
+curl http://195.251.63.150:8888/v1/models
 ```
 
 Expected model IDs include:
 
 ```text
-qwen36-nvfp4
+RadixArk/Qwen3.8-Flash-Next-NVFP4
 ```
 
-The local and Hub runners use `qwen36-nvfp4`.
+The local and Hub runners use `RadixArk/Qwen3.8-Flash-Next-NVFP4`.
 
 The endpoint must support the Responses API path used by Codex:
 
 ```bash
-curl http://100.92.46.71:8001/v1/responses \
+curl http://195.251.63.150:8888/v1/responses \
   -H 'Content-Type: application/json' \
-  -d '{"model":"qwen36-nvfp4","input":"Say OK only","max_output_tokens":2048}'
+  -d '{"model":"RadixArk/Qwen3.8-Flash-Next-NVFP4","input":"Say OK only","max_output_tokens":2048}'
 ```
 
-`qwen36-nvfp4` may emit a reasoning block before the final message; use at least
-`2048` `max_output_tokens` in manual curl tests. For interactive Cohort Scout
+`RadixArk/Qwen3.8-Flash-Next-NVFP4` emits a reasoning block before the final message by default;
+use at least `2048` `max_output_tokens` in manual curl tests. For interactive Cohort Scout
 latency, serve with thinking disabled by default (see [operators.md](operators.md)).
 
 ## Agent Onboarding
@@ -204,7 +221,7 @@ Use these prompts to verify that Cohort Scout follows the wiki instead of greppi
 | `@Cohort Scout explain how mip.Client.from_env() gets configuration` | `read-guide --page 05-env-and-backend --topic "Client.from_env"` |
 | `@Cohort Scout summarize what a new MIP user should do first` | `read-guide --page 01-onboarding` and optionally `workspace/Welcome.ipynb` outline |
 | `@Cohort Scout create a new scratch notebook named mcp_probe.ipynb with one markdown cell that says MCP OK` | MCP CLI only; use `read-guide --page 04-jupyter-mcp` if command details are needed |
-| `@Cohort Scout run a novel statistical stroke analysis with significance on SSR` | `read-guide --page recipes/stroke-analysis --topic novel`; `mip-data-model-summary stroke --version 3.7`; `python scratch/stroke_preflight.py`; `scratch-copy-template scratch/<name>.py --source examples/algorithm_examples.py`; small `scratch-append-lines` / `scratch-replace-snippet` edits; run script; `scratch-to-notebook`; no heredocs |
+| `@Cohort Scout run a novel statistical stroke analysis with significance on SSR` | `read-guide --page recipes/stroke-analysis --topic novel`; `mip-data-model-summary stroke --version 3.7`; `python scratch/stroke_preflight.py`; `scratch-write-file scratch/<name>.py` (whole script, `# %%` markers, one arg per line or `--content-file`); `scratch-replace-snippet` for small fixes; run script; `scratch-to-notebook`; no heredocs |
 
 Success for the stroke prompt means: bounded metadata discovery, SSR-only dataset (no SSR+even/odd mix), preflight coverage check, a **new** scratch script derived from `examples/algorithm_examples.py` (trimmed to one hypothesis), federated `describe` / `t_test` / `chi_square_test` / `logistic_regression` (no `Pipeline.run()`), primary adjusted logistic **OR (95% CI)** on the OR scale, a populated `scratch/<name>.ipynb`, aggregate results only, and no giant shell payloads or raw row extraction.
 

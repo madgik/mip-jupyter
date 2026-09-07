@@ -15,8 +15,8 @@ if ! command -v codex-acp >/dev/null 2>&1; then
 fi
 
 export PLATFORM_BACKEND_URL="${PLATFORM_BACKEND_URL:-http://127.0.0.1:8080/services}"
-export CODEX_VLLM_BASE_URL="${CODEX_VLLM_BASE_URL:-http://100.92.46.71:8001/v1}"
-export CODEX_VLLM_MODEL="qwen36-nvfp4"
+export CODEX_VLLM_BASE_URL="${CODEX_VLLM_BASE_URL:-http://195.251.63.150:8888/v1}"
+export CODEX_VLLM_MODEL="${CODEX_VLLM_MODEL:-RadixArk/Qwen3.8-Flash-Next-NVFP4}"
 export JUPYTER_HOST="${JUPYTER_HOST:-127.0.0.1}"
 export JUPYTER_PORT="${JUPYTER_PORT:-8888}"
 export JUPYTER_TOKEN="${JUPYTER_TOKEN:-dev}"

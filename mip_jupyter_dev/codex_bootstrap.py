@@ -23,7 +23,13 @@ MIP_CONTEXT = (
 )
 
 SCOPE_RULES = (
-    "MIP notebooks only; refuse off-topic without tools; no invented catalog data."
+    "MIP notebooks only; refuse off-topic directly (no tools for off-topic); "
+    "no invented catalog data."
+)
+
+BREVITY_RULES = (
+    "Reply concise; summarize run outputs; don't re-read-guide pages already loaded "
+    "or paste notebook-visible code."
 )
 
 USER_FACING_RULES = (
@@ -33,6 +39,14 @@ USER_FACING_RULES = (
 
 PRIVACY_RULES = (
     "Aggregates only; never expose tokens, identifiers, or row-level data."
+)
+
+PROGRESS_RULES = (
+    "Explore broadly, compare algorithms, narrow to one hypothesis. "
+    "Write the full analysis as ONE scratch .py with # %% markers, then "
+    "scratch-to-notebook once; never per-cell fragments. Never re-run a discovery; "
+    "update the plan each step. If not converging, stop and ask the user. "
+    "Stop once the notebook runs end-to-end."
 )
 
 MCP_CLI_RULES = (
@@ -49,9 +63,9 @@ NATIVE_MCP_RULES = (
 
 TOOL_PAYLOAD_RULES = (
     "Small JSON args. No write_stdin/heredocs/shell writes. "
-    "Tiny notebook edits: jupyter-mcp append/edit-cell; multi-step MIP: "
-    "jupyter-mcp scratch-copy-template → python scratch/<name>.py → "
-    "jupyter-mcp scratch-to-notebook."
+    "Notebook is the deliverable: write ONE scratch .py with # %% cell markers "
+    "via scratch-write-file, then scratch-to-notebook in one call. "
+    "Run cells with run-cell to validate."
 )
 
 ROUTING_RULES = (
@@ -65,65 +79,45 @@ ROUTING_RULES = (
     "One guide page per turn. Never find/grep the wiki tree."
 )
 
-# Soft budget for production catalog base_instructions (chars).
-BASE_INSTRUCTIONS_MAX_CHARS = 1400
+# Soft budget for production catalog base_instructions (chars). Keep headroom
+# for the next rule tweak instead of sitting 47 chars under the limit.
+BASE_INSTRUCTIONS_MAX_CHARS = 2000
 
 
 def build_base_instructions(*, enable_native_jupyter_mcp: bool = False) -> str:
     tool_rules = NATIVE_MCP_RULES if enable_native_jupyter_mcp else MCP_CLI_RULES
     return (
         f"You are {MIP_PERSONA_NAME}. {MIP_CONTEXT} {SCOPE_RULES} "
-        f"{USER_FACING_RULES} {PRIVACY_RULES} {tool_rules} {TOOL_PAYLOAD_RULES} "
-        f"{ROUTING_RULES} New work under scratch/; curated metadata only."
+        f"{USER_FACING_RULES} {PRIVACY_RULES} {PROGRESS_RULES} {tool_rules} "
+        f"{TOOL_PAYLOAD_RULES} {ROUTING_RULES} New work under scratch/; "
+        f"curated metadata only. {BREVITY_RULES}"
     )
 
 
 BASE_INSTRUCTIONS = build_base_instructions()
 
-DEFAULT_CODEX_BASE_URL = "http://100.92.46.71:8001/v1"
-# Must match the vLLM /v1/models id (alias for nvidia/Qwen3.6-35B-A3B-NVFP4).
-DEFAULT_CODEX_MODEL = "qwen36-nvfp4"
+DEFAULT_CODEX_BASE_URL = "http://195.251.63.150:8888/v1"
+# Fallback served id only. Production and CI override it with CODEX_VLLM_MODEL on
+# the Hub spawner / container env, so nothing here has to change to switch models.
+DEFAULT_CODEX_MODEL = "RadixArk/Qwen3.8-Flash-Next-NVFP4"
+# Provider id is cosmetic (selects `[model_providers.<id>]` with wire_api=response);
+# any OpenAI-compatible /v1/responses server is served under the `vllm` id.
 DEFAULT_CODEX_PROVIDER = "vllm"
-# Agent window is capped below the served max_model_len (262144) to limit context bloat.
+# Agent window is capped below the served context_length (262144) to limit context bloat.
 DEFAULT_CODEX_CONTEXT_WINDOW = 131072
-DEFAULT_CODEX_AUTO_COMPACT_LIMIT = 112000
+DEFAULT_CODEX_AUTO_COMPACT_LIMIT = 40000
 DEFAULT_CODEX_REASONING_EFFORT = "low"
 SUPPORTED_CODEX_REASONING_EFFORTS = frozenset({"minimal", "low", "medium"})
 DEFAULT_CODEX_PERSONA_ID = MIP_PERSONA_ID
 DEFAULT_MCP_PORT = 3001
 
-@dataclass(frozen=True)
-class VllmModelProfile:
-    slug: str
-    display_name: str
-    description: str
-    context_window: int
-    auto_compact_limit: int
-    priority: int
-
-
-VLLM_MODEL_REGISTRY: dict[str, VllmModelProfile] = {
-    "qwen36-nvfp4": VllmModelProfile(
-        slug="qwen36-nvfp4",
-        display_name="qwen36-nvfp4",
-        description=(
-            "Qwen3.6-35B-A3B NVFP4 via vLLM "
-            "(served id qwen36-nvfp4; HF root "
-            "nvidia/Qwen3.6-35B-A3B-NVFP4)."
-        ),
-        context_window=131072,
-        auto_compact_limit=112000,
-        priority=0,
-    ),
-}
-
-DEFAULT_CODEX_MODELS = (DEFAULT_CODEX_MODEL,)
-
-
-def _validate_vllm_model(model: str, *, source: str) -> None:
-    if model not in VLLM_MODEL_REGISTRY:
-        supported = ", ".join(DEFAULT_CODEX_MODELS)
-        raise ValueError(f"{source} must be one of: {supported}.")
+# Runtime overrides. Every value below is optional; unset means "use the default".
+ENV_CODEX_BASE_URL = "CODEX_VLLM_BASE_URL"
+ENV_CODEX_MODEL = "CODEX_VLLM_MODEL"
+ENV_CODEX_PROVIDER = "CODEX_VLLM_PROVIDER"
+ENV_CODEX_CONTEXT_WINDOW = "CODEX_MODEL_CONTEXT_WINDOW"
+ENV_CODEX_AUTO_COMPACT_LIMIT = "CODEX_AUTO_COMPACT_TOKEN_LIMIT"
+ENV_CODEX_REASONING_EFFORT = "CODEX_REASONING_EFFORT"
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -133,25 +127,31 @@ def _env_flag(name: str, default: bool = False) -> bool:
     return value.lower() in {"1", "true", "yes", "on"}
 
 
-def _active_context_window(model: str) -> int:
-    profile = VLLM_MODEL_REGISTRY[model]
-    if os.getenv("CODEX_MODEL_CONTEXT_WINDOW"):
-        return int(os.getenv("CODEX_MODEL_CONTEXT_WINDOW", str(profile.context_window)))
-    return profile.context_window
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        return int(value.strip())
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an integer, got {value!r}.") from exc
 
 
-def _active_auto_compact_limit(model: str) -> int:
-    profile = VLLM_MODEL_REGISTRY[model]
-    if os.getenv("CODEX_AUTO_COMPACT_TOKEN_LIMIT"):
-        return int(os.getenv("CODEX_AUTO_COMPACT_TOKEN_LIMIT", str(profile.auto_compact_limit)))
-    return profile.auto_compact_limit
+def normalize_codex_base_url(base_url: str) -> str:
+    """Trim whitespace and trailing slashes so `{base_url}/responses` stays valid."""
+    url = base_url.strip().rstrip("/")
+    if not url:
+        raise ValueError(
+            "CODEX_VLLM_BASE_URL must be a reachable OpenAI-compatible base URL ending in /v1."
+        )
+    return url
 
 
 def _active_reasoning_effort() -> str:
-    effort = os.getenv("CODEX_REASONING_EFFORT", DEFAULT_CODEX_REASONING_EFFORT).strip().lower()
+    effort = os.getenv(ENV_CODEX_REASONING_EFFORT, DEFAULT_CODEX_REASONING_EFFORT).strip().lower()
     if effort not in SUPPORTED_CODEX_REASONING_EFFORTS:
         supported = ", ".join(sorted(SUPPORTED_CODEX_REASONING_EFFORTS))
-        raise ValueError(f"CODEX_REASONING_EFFORT must be one of: {supported}.")
+        raise ValueError(f"{ENV_CODEX_REASONING_EFFORT} must be one of: {supported}.")
     return effort
 
 
@@ -168,22 +168,51 @@ class CodexSettings:
     enable_native_jupyter_mcp: bool
 
     @classmethod
+    def resolve(
+        cls,
+        *,
+        base_url: str,
+        model: str,
+        provider: str,
+        context_window: int | None = None,
+        auto_compact_limit: int | None = None,
+        reasoning_effort: str | None = None,
+        mcp_port: int | None = None,
+        enable_native_jupyter_mcp: bool = False,
+    ) -> CodexSettings:
+        """Build settings from explicit values with env normalization and validation."""
+        active_model = model.strip() or DEFAULT_CODEX_MODEL
+        return cls(
+            base_url=normalize_codex_base_url(base_url),
+            model=active_model,
+            catalog_models=(active_model,),
+            provider=provider.strip() or DEFAULT_CODEX_PROVIDER,
+            context_window=(
+                context_window
+                if context_window is not None
+                else _env_int(ENV_CODEX_CONTEXT_WINDOW, DEFAULT_CODEX_CONTEXT_WINDOW)
+            ),
+            auto_compact_limit=(
+                auto_compact_limit
+                if auto_compact_limit is not None
+                else _env_int(ENV_CODEX_AUTO_COMPACT_LIMIT, DEFAULT_CODEX_AUTO_COMPACT_LIMIT)
+            ),
+            reasoning_effort=reasoning_effort or _active_reasoning_effort(),
+            mcp_port=mcp_port if mcp_port is not None else int(os.getenv("JUPYTER_MCP_PORT", str(DEFAULT_MCP_PORT))),
+            enable_native_jupyter_mcp=enable_native_jupyter_mcp,
+        )
+
+    @classmethod
     def from_env(
         cls,
         *,
         mcp_port: int | None = None,
     ) -> CodexSettings:
-        model = os.getenv("CODEX_VLLM_MODEL", DEFAULT_CODEX_MODEL)
-        _validate_vllm_model(model, source="CODEX_VLLM_MODEL")
-        return cls(
-            base_url=os.getenv("CODEX_VLLM_BASE_URL", DEFAULT_CODEX_BASE_URL),
-            model=model,
-            catalog_models=DEFAULT_CODEX_MODELS,
-            provider=os.getenv("CODEX_VLLM_PROVIDER", DEFAULT_CODEX_PROVIDER),
-            context_window=_active_context_window(model),
-            auto_compact_limit=_active_auto_compact_limit(model),
-            reasoning_effort=_active_reasoning_effort(),
-            mcp_port=mcp_port if mcp_port is not None else int(os.getenv("JUPYTER_MCP_PORT", str(DEFAULT_MCP_PORT))),
+        return cls.resolve(
+            base_url=os.getenv(ENV_CODEX_BASE_URL, DEFAULT_CODEX_BASE_URL),
+            model=os.getenv(ENV_CODEX_MODEL, DEFAULT_CODEX_MODEL),
+            provider=os.getenv(ENV_CODEX_PROVIDER, DEFAULT_CODEX_PROVIDER),
+            mcp_port=mcp_port,
             enable_native_jupyter_mcp=_env_flag("CODEX_ENABLE_NATIVE_JUPYTER_MCP")
             and not _env_flag("CODEX_DISABLE_NATIVE_JUPYTER_MCP"),
         )
@@ -194,16 +223,17 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 def _catalog_entry(
-    profile: VllmModelProfile,
+    slug: str,
     *,
     context_window: int,
     base_instructions: str,
     reasoning_effort: str,
+    priority: int,
 ) -> dict:
     return {
-        "slug": profile.slug,
-        "display_name": profile.display_name,
-        "description": profile.description,
+        "slug": slug,
+        "display_name": slug,
+        "description": f"{slug} via an OpenAI-compatible /v1/responses endpoint.",
         "default_reasoning_level": reasoning_effort,
         "supported_reasoning_levels": [
             {
@@ -222,7 +252,7 @@ def _catalog_entry(
         "shell_type": "shell_command",
         "visibility": "list",
         "supported_in_api": True,
-        "priority": profile.priority,
+        "priority": priority,
         "additional_speed_tiers": [],
         "service_tiers": [],
         "availability_nux": None,
@@ -243,29 +273,28 @@ def _catalog_entry(
         "experimental_supported_tools": [],
         "input_modalities": ["text"],
         "supports_search_tool": False,
-        # Qwen on vLLM needs full Responses tool payloads; lite mode returns
+        # The Responses path needs full tool payloads; lite mode returns
         # plain text instead of shell/function_call items.
         "use_responses_lite": False,
     }
 
 
 def write_codex_model_catalog(path: Path, settings: CodexSettings) -> None:
-    entries = []
+    """Write the Codex catalog; the active served id is the first (and only) entry."""
+
     base_instructions = build_base_instructions(
         enable_native_jupyter_mcp=settings.enable_native_jupyter_mcp
     )
-    for slug in settings.catalog_models:
-        profile = VLLM_MODEL_REGISTRY[slug]
-        context_window = settings.context_window if slug == settings.model else profile.context_window
-        entries.append(
-            _catalog_entry(
-                profile,
-                context_window=context_window,
-                base_instructions=base_instructions,
-                reasoning_effort=settings.reasoning_effort,
-            )
+    entries = [
+        _catalog_entry(
+            slug,
+            context_window=settings.context_window,
+            base_instructions=base_instructions,
+            reasoning_effort=settings.reasoning_effort,
+            priority=index,
         )
-    entries.sort(key=lambda entry: entry["priority"])
+        for index, slug in enumerate(settings.catalog_models)
+    ]
     _write_json(path, {"models": entries})
 
 

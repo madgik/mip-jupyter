@@ -41,11 +41,11 @@ def validate_shell_command(command: str) -> str | None:
     if "write_stdin" in lowered:
         return "write_stdin is disabled; use scratch-append-lines or append-code."
     if _HEREDOC_PATTERN.search(text):
-        return "Heredocs are disabled; use scratch-copy-template and scratch-append-lines."
+        return "Heredocs are disabled; use scratch-write-file or append-code."
     if _NOTEBOOK_READ_PATTERN.search(text):
         return "Raw notebook file reads are disabled; use notebook-outline or read-cell."
     if _SHELL_REDIRECT_PATTERN.search(text):
-        return "Shell file writes are disabled; use scratch-copy-template or scratch-append-lines."
+        return "Shell file writes are disabled; use scratch-write-file or append-code."
     if _OVERSIZED_PYTHON_C_PATTERN.search(text):
         return "Oversized python -c payloads are disabled; use scratch/*.py scripts."
     return None

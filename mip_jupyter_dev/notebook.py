@@ -15,12 +15,15 @@ from pathlib import Path
 from .codex_bootstrap import (
     DEFAULT_CODEX_BASE_URL,
     DEFAULT_CODEX_MODEL,
-    DEFAULT_CODEX_MODELS,
     DEFAULT_CODEX_PROVIDER,
     DEFAULT_CODEX_CONTEXT_WINDOW,
     DEFAULT_CODEX_AUTO_COMPACT_LIMIT,
     DEFAULT_CODEX_REASONING_EFFORT,
     DEFAULT_MCP_PORT,
+    ENV_CODEX_AUTO_COMPACT_LIMIT,
+    ENV_CODEX_BASE_URL,
+    ENV_CODEX_CONTEXT_WINDOW,
+    ENV_CODEX_MODEL,
     CodexSettings,
     bootstrap_codex,
 )
@@ -199,17 +202,34 @@ def _parser() -> argparse.ArgumentParser:
         help="MCP port for Jupyter tools. Defaults to the first free local port at or above 3001.",
     )
     parser.add_argument("--token", default=os.getenv("JUPYTER_TOKEN", DEFAULT_TOKEN))
-    parser.add_argument("--codex-base-url", default=os.getenv("CODEX_VLLM_BASE_URL", DEFAULT_CODEX_BASE_URL))
+    parser.add_argument(
+        "--codex-base-url",
+        default=os.getenv(ENV_CODEX_BASE_URL, DEFAULT_CODEX_BASE_URL),
+        help=f"OpenAI-compatible base URL ending in /v1 (overrides {ENV_CODEX_BASE_URL}).",
+    )
+    parser.add_argument(
+        "--codex-model",
+        default=os.getenv(ENV_CODEX_MODEL, DEFAULT_CODEX_MODEL),
+        help=f"Served model id on that endpoint (overrides {ENV_CODEX_MODEL}).",
+    )
     parser.add_argument("--codex-provider", default=os.getenv("CODEX_VLLM_PROVIDER", DEFAULT_CODEX_PROVIDER))
     parser.add_argument(
         "--codex-context-window",
         type=int,
-        default=int(os.getenv("CODEX_MODEL_CONTEXT_WINDOW", str(DEFAULT_CODEX_CONTEXT_WINDOW))),
+        default=None,
+        help=(
+            f"Agent context window in tokens. Defaults to ${ENV_CODEX_CONTEXT_WINDOW} "
+            f"(else {DEFAULT_CODEX_CONTEXT_WINDOW})."
+        ),
     )
     parser.add_argument(
         "--codex-auto-compact-limit",
         type=int,
-        default=int(os.getenv("CODEX_AUTO_COMPACT_TOKEN_LIMIT", str(DEFAULT_CODEX_AUTO_COMPACT_LIMIT))),
+        default=None,
+        help=(
+            f"Auto-compaction token limit. Defaults to ${ENV_CODEX_AUTO_COMPACT_LIMIT} "
+            f"(else {DEFAULT_CODEX_AUTO_COMPACT_LIMIT})."
+        ),
     )
     parser.add_argument(
         "--codex-reasoning-effort",
@@ -233,10 +253,9 @@ def _parser() -> argparse.ArgumentParser:
 
 def _codex_settings_from_args(args: argparse.Namespace) -> CodexSettings:
     native_mcp_forwarding = args.enable_native_jupyter_mcp and not args.disable_jupyter_mcp
-    return CodexSettings(
+    return CodexSettings.resolve(
         base_url=args.codex_base_url,
-        model=DEFAULT_CODEX_MODEL,
-        catalog_models=DEFAULT_CODEX_MODELS,
+        model=args.codex_model,
         provider=args.codex_provider,
         context_window=args.codex_context_window,
         auto_compact_limit=args.codex_auto_compact_limit,
