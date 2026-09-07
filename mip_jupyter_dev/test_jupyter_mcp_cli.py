@@ -116,6 +116,20 @@ def test_scratch_read_cli_routes() -> None:
     assert arguments == {"path": "scratch/notes.md", "max_chars": 2000}
 
 
+def test_scratch_write_file_cli_routes() -> None:
+    args = jupyter_mcp_cli._parser().parse_args(
+        ["scratch-write-file", "scratch/foo.py", "print(1)", "print(2)"]
+    )
+    name, arguments = jupyter_mcp_cli._tool_call_for_args(args)
+    assert name == "scratch_write_file"
+    # One inline argument is one line, so the script keeps its line structure.
+    assert arguments == {"path": "scratch/foo.py", "content": "print(1)\nprint(2)"}
+    args = jupyter_mcp_cli._parser().parse_args(
+        ["scratch-write-file", "scratch/foo.py", "--content-file", "snippet.txt"]
+    )
+    assert args.content_file == "snippet.txt"
+
+
 def test_content_file_rejects_outside_workspace(tmp_path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()

@@ -35,8 +35,7 @@ MAX_WIKI_CONTENT_CHARS = 6000
 DEFAULT_WIKI_MAX_CHARS = 3000
 MAX_CELL_READ_CHARS = 20000
 MAX_CELL_WRITE_CHARS = 4000
-MAX_SCRATCH_APPEND_LINES = 20
-MAX_SCRATCH_APPEND_CHARS = 2048
+MAX_SCRATCH_PAYLOAD_CHARS = 8000
 MAX_SCRATCH_SNIPPET_CHARS = 1024
 SCRATCH_TEMPLATE_DEFAULT = "examples/algorithm_examples.py"
 MAX_SCRATCH_READ_CHARS = 8000
@@ -72,6 +71,7 @@ SAFE_JUPYTER_MCP_TOOLS = [
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_copy_template",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_read",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_append_lines",
+    "mip_jupyter_dev.jupyter_mcp_tools:scratch_write_file",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_replace_snippet",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_to_notebook",
     "mip_jupyter_dev.jupyter_mcp_tools:scratch_list",
@@ -407,8 +407,8 @@ def _snippet_for_query(text: str, query: str) -> str:
     return _truncate(snippet.replace("\r\n", "\n"), MAX_DOC_SNIPPET_CHARS)
 
 
-def _section_matches(text: str, topic: str) -> list[str]:
-    terms = [term for term in re.split(r"\W+", topic.lower()) if term]
+def _section_matches(text: str, topic: str | None) -> list[str]:
+    terms = [term for term in re.split(r"\W+", (topic or "").lower()) if term]
     if not terms:
         return [text]
     sections: list[str] = []
@@ -448,16 +448,15 @@ async def agent_read_guide(
             "error": "Agent wiki page is missing.",
         }
     text = guide_path.read_text(encoding="utf-8")
-    if topic:
-        matches = _section_matches(text, topic)
-        content = "\n\n".join(matches) if matches else ""
-    else:
-        content = text
+    # A missed topic falls back to the whole page and reports matched=false.
+    sections = _section_matches(text, topic)
+    content = "\n\n".join(sections) if sections else text
     return {
         "ok": True,
         "page": page_key,
         "path": relative_path.as_posix(),
         "topic": topic,
+        "matched": bool(sections),
         "content": _truncate(content, max_chars),
         "truncated": len(content) > max_chars,
     }
@@ -939,13 +938,9 @@ async def scratch_append_lines(path: str, lines: str) -> dict[str, Any]:
     relative, file_path = _scratch_file(path)
     chunk = _normalized_append_chunk(lines)
     line_count = len(chunk.splitlines())
-    if line_count > MAX_SCRATCH_APPEND_LINES:
+    if len(chunk) > MAX_SCRATCH_PAYLOAD_CHARS:
         raise ValueError(
-            f"Append exceeds {MAX_SCRATCH_APPEND_LINES} lines; split into smaller calls."
-        )
-    if len(chunk) > MAX_SCRATCH_APPEND_CHARS:
-        raise ValueError(
-            f"Append exceeds {MAX_SCRATCH_APPEND_CHARS} characters; split into smaller calls."
+            f"Append exceeds {MAX_SCRATCH_PAYLOAD_CHARS} characters; split into smaller calls."
         )
     if _scratch_file_ends_with(file_path, lines):
         return {
@@ -987,6 +982,28 @@ async def scratch_replace_snippet(
         raise ValueError("old snippet is ambiguous; provide more context.")
     file_path.write_text(text.replace(old, new, 1), encoding="utf-8")
     return {"ok": True, "path": relative.as_posix(), "replaced": True}
+
+
+async def scratch_write_file(path: str, content: str) -> dict[str, Any]:
+    """Write (or overwrite) a complete scratch .py or .md file in one call."""
+
+    relative, file_path = _scratch_read_path(path)
+    if not content.strip():
+        raise ValueError(
+            "Scratch write content is empty; refusing to truncate an existing scratch file."
+        )
+    if len(content) > MAX_SCRATCH_PAYLOAD_CHARS:
+        raise ValueError(
+            f"Scratch write exceeds {MAX_SCRATCH_PAYLOAD_CHARS} characters; "
+            "split into smaller writes or use scratch-append-lines."
+        )
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content, encoding="utf-8")
+    return {
+        "ok": True,
+        "path": relative.as_posix(),
+        "written_chars": len(content),
+    }
 
 
 def _has_cell_markers(source: str) -> bool:

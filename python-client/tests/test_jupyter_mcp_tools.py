@@ -173,6 +173,35 @@ class TestJupyterMcpTools(unittest.TestCase):
         self.assertEqual(page["page"], "recipes/stroke-analysis")
         self.assertIn("pipeline.t_test", page["content"])
 
+    def test_read_guide_topic_match_and_unmatched_fallback(self):
+        tmp, workspace = self._workspace()
+        self.addCleanup(tmp.cleanup)
+        agent_docs = workspace.parent / "agent-docs"
+        wiki = agent_docs / "llm" / "wiki"
+        wiki.mkdir(parents=True)
+        (wiki / "04-jupyter-mcp.md").write_text(
+            "# Jupyter MCP\n\n"
+            "## Tool payload safety\n\nKeep args small.\n\n"
+            "## Common commands\n\nread-guide usage.",
+            encoding="utf-8",
+        )
+
+        with patch.dict(
+            os.environ,
+            {"MIP_JUPYTER_ROOT": str(workspace), "MIP_AGENT_DOCS": str(agent_docs)},
+        ):
+            matched = run(tools.agent_read_guide(page="04-jupyter-mcp", topic="payload"))
+            unmatched = run(tools.agent_read_guide(page="04-jupyter-mcp", topic="zzzz_nonexistent"))
+
+        self.assertTrue(matched["ok"])
+        self.assertIn("Keep args small", matched["content"])
+
+        # Unmatched topic must fall back to the full page, never empty content.
+        self.assertTrue(unmatched["ok"])
+        self.assertFalse(unmatched["matched"])
+        self.assertIn("Common commands", unmatched["content"])
+        self.assertTrue(matched["matched"])
+
     def test_notebook_outline_excludes_full_outputs_and_cell_read_limits_source(self):
         tmp, workspace = self._workspace()
         self.addCleanup(tmp.cleanup)
@@ -385,9 +414,32 @@ class TestJupyterMcpTools(unittest.TestCase):
                 run(
                     tools.scratch_append_lines(
                         "scratch/foo.py",
-                        lines="x\n" * (tools.MAX_SCRATCH_APPEND_LINES + 1),
+                        lines="x" * (tools.MAX_SCRATCH_PAYLOAD_CHARS + 1),
                     )
                 )
+
+    def test_scratch_write_file_writes_overwrites_and_rejects_bad_path(self):
+        tmp, workspace = self._workspace()
+        self.addCleanup(tmp.cleanup)
+        (workspace / "scratch").mkdir(parents=True, exist_ok=True)
+
+        with patch.dict(os.environ, {"MIP_JUPYTER_ROOT": str(workspace)}):
+            written = run(tools.scratch_write_file("scratch/foo.py", "x = 1\n"))
+            run(tools.scratch_write_file("scratch/foo.py", "y = 2\n"))
+            read_back = run(tools.scratch_read("scratch/foo.py"))
+            with self.assertRaises(ValueError):
+                run(tools.scratch_write_file("../evil.py", "x"))
+            with self.assertRaises(ValueError):
+                run(tools.scratch_write_file("scratch/foo.py", "   "))
+            with self.assertRaises(ValueError):
+                run(
+                    tools.scratch_write_file(
+                        "scratch/big.py", "z" * (tools.MAX_SCRATCH_PAYLOAD_CHARS + 1)
+                    )
+                )
+
+        self.assertTrue(written["ok"])
+        self.assertEqual(read_back["content"], "y = 2\n")
 
     def test_scratch_list_returns_py_and_md_artifacts(self):
         tmp, workspace = self._workspace()

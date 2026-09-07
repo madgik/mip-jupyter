@@ -24,31 +24,33 @@ payload; split large edits.
 giant `python -c`; `--content-file -`; paths outside the workspace; `cat` on
 `.ipynb` JSON; replaying huge scripts after compaction.
 
-**Safe:** metadata summaries → `notebook-outline` / bounded `read-cell` →
-`scratch-copy-template` + `scratch-append-lines` / `scratch-replace-snippet` →
-`python scratch/<name>.py` → `scratch-to-notebook`.
+**Safe (preferred):** write the full analysis as **ONE** `scratch/<name>.py` with
+`# %%` cell markers via `scratch-write-file`, run `python scratch/<name>.py` to
+validate (exit 0), then `scratch-to-notebook` **once** → `open-file` /
+`notebook-outline`. Do **not** build cell-by-cell fragments.
 
 On **tool-call formatting errors**: new chat, `scratch-list`, resume existing
 `scratch/*.py` with smaller steps.
 
-## Direct notebook vs scratch first
+## Build the notebook (single-shot)
 
 | Choose | When |
 |--------|------|
-| **Direct notebook** | Markdown only, one small code cell, outline/read, rename/create empty notebook, fix one cell |
-| **Scratch first** | Multi-step MIP client work, federated algorithms, anything that needs `python …` validation before user-facing cells |
-| **Always after scratch** | Successful `python scratch/<name>.py` → `scratch-to-notebook` → `open-file` / `notebook-outline` (do not stop at `.py` alone unless the user asked for a script only) |
+| **Write ONE script → transfer once (default)** | Write the whole analysis as ONE `scratch/<name>.py` with `# %%` markers via `scratch-write-file`; validate with `python scratch/<name>.py` (exit 0); then `scratch-to-notebook` once. Never write per-cell fragment files. |
+| **Direct cell tools** | Only for a tiny tweak to an existing notebook (one `append-code`/`edit-cell`/`run-cell`). |
 
 ## Verify before transfer
 
-After editing a scratch script, run it from the workspace root:
+After writing the ONE `scratch/<name>.py` with `# %%` markers, run it from the
+workspace root before `scratch-to-notebook`:
 
 ```bash
 python scratch/<name>.py
 ```
 
-Exit 0 before `scratch-to-notebook`. Prefer this over `python -c` / heredocs.
-`# %%` markers split into multiple cells when present; unmarked scripts transfer as one code cell.
+Exit 0 before `scratch-to-notebook`. `# %%` markers split into multiple cells;
+unmarked scripts transfer as one code cell. Prefer `python scratch/<name>.py`
+over `python -c` / heredocs.
 
 ## Common commands
 
@@ -60,9 +62,11 @@ jupyter-mcp search-docs "Client.from_env"
 jupyter-mcp notebook-outline PATH
 jupyter-mcp read-cell PATH INDEX --max-chars 3000
 
-# scratch
+# scratch (ONE script, one transfer; each inline arg is one line)
 jupyter-mcp scratch-list
-jupyter-mcp scratch-copy-template scratch/my.py --source examples/algorithm_examples.py
+jupyter-mcp scratch-write-file scratch/my.py "# %% setup" "import mip"
+jupyter-mcp scratch-write-file scratch/my.py --content-file draft.py
+jupyter-mcp scratch-copy-template scratch/my.py --source examples/algorithm_examples.py  # template start
 jupyter-mcp scratch-append-lines scratch/my.py "# comment"
 jupyter-mcp scratch-replace-snippet scratch/my.py "OLD" "NEW"
 jupyter-mcp scratch-to-notebook scratch/my.py scratch/my.ipynb --title "My analysis"
@@ -87,7 +91,7 @@ Multi-step exploration: `read-guide --page agent-exploration`.
 
 1. `read-guide --page … --topic …` only when needed (skip INDEX/`00` by default)
 2. Outline before `read-cell`
-3. Tiny edit → direct notebook tools; substantial analysis → scratch → `python scratch/<name>.py` → `scratch-to-notebook`
+3. Write ONE `scratch/<name>.py` with `# %%` markers via `scratch-write-file` → `python scratch/<name>.py` (exit 0) → `scratch-to-notebook` once; direct cell tools only for a tiny tweak to an existing notebook
 4. New notebooks under `scratch/` unless named otherwise
 5. Edit by index; re-read before replying; summarize run outputs
 

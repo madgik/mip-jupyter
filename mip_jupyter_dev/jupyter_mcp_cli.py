@@ -88,30 +88,25 @@ def call_tool(url: str, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def _content_from_args(args: argparse.Namespace) -> str:
+    """Collect content from a workspace file or inline args; tools enforce size caps."""
+
     if getattr(args, "content_file", None):
         if args.content_file == "-":
             if os.getenv("MIP_JUPYTER_DEV_UNSAFE_STDIN") != "1":
                 raise ValueError(
                     "Reading content from stdin is disabled; pass content inline or use a file path."
                 )
-            return sys.stdin.read()
-        relative = tools._workspace_relative_path(args.content_file)
-        file_path = tools._workspace_root() / relative
-        if not file_path.is_file():
-            raise FileNotFoundError(f"Content file not found in workspace: {relative.as_posix()}")
-        with file_path.open(encoding="utf-8") as handle:
-            content = handle.read()
-        if len(content) > tools.MAX_CELL_WRITE_CHARS:
-            raise ValueError(
-                f"Content exceeds {tools.MAX_CELL_WRITE_CHARS} characters; "
-                "use scratch-append-lines or smaller append-code calls."
-            )
-        return content
-    content = " ".join(getattr(args, "content", []) or [])
-    if len(content) > tools.MAX_CELL_WRITE_CHARS:
-        raise ValueError(
-            f"Content exceeds {tools.MAX_CELL_WRITE_CHARS} characters; split into smaller calls."
-        )
+            content = sys.stdin.read()
+        else:
+            relative = tools._workspace_relative_path(args.content_file)
+            file_path = tools._workspace_root() / relative
+            if not file_path.is_file():
+                raise FileNotFoundError(f"Content file not found in workspace: {relative.as_posix()}")
+            content = file_path.read_text(encoding="utf-8")
+    else:
+        # Each inline argument is one line: space-joining would collapse a script
+        # (and its `# %%` cell markers) onto a single line.
+        content = "\n".join(getattr(args, "content", []) or [])
     return content
 
 
@@ -222,6 +217,12 @@ def _parser() -> argparse.ArgumentParser:
     scratch_append.add_argument("path")
     scratch_append.add_argument("lines", nargs="+")
 
+    scratch_write = subparsers.add_parser(
+        "scratch-write-file", help="Write (or overwrite) a complete scratch .py or .md file"
+    )
+    scratch_write.add_argument("path")
+    _add_content_args(scratch_write)
+
     scratch_replace = subparsers.add_parser(
         "scratch-replace-snippet", help="Replace one small snippet in scratch/<name>.py"
     )
@@ -301,10 +302,15 @@ def _tool_call_for_args(args: argparse.Namespace) -> tuple[str, dict[str, Any]]:
         return "scratch_copy_template", {"dest": args.dest, "source": args.source}
     if command == "scratch-read":
         return "scratch_read", {"path": args.path, "max_chars": args.max_chars}
+    if command == "scratch-write-file":
+        return "scratch_write_file", {
+            "path": args.path,
+            "content": _content_from_args(args),
+        }
     if command == "scratch-append-lines":
         return "scratch_append_lines", {
             "path": args.path,
-            "lines": _text_arg(args.lines),
+            "lines": "\n".join(args.lines or []),
         }
     if command == "scratch-replace-snippet":
         return "scratch_replace_snippet", {
