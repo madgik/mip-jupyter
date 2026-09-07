@@ -100,6 +100,9 @@ DEFAULT_CODEX_BASE_URL = "http://195.251.63.150:8888/v1"
 # Fallback served id only. Production and CI override it with CODEX_VLLM_MODEL on
 # the Hub spawner / container env, so nothing here has to change to switch models.
 DEFAULT_CODEX_MODEL = "RadixArk/Qwen3.8-Flash-Next-NVFP4"
+# Label shown in the Jupyter AI model picker (the request still sends the served
+# slug above). Kept in sync with the persona name by test_codex_bootstrap.
+AGENT_MODEL_DISPLAY_NAME = "Cohort Scout"
 # Provider id is cosmetic (selects `[model_providers.<id>]` with wire_api=response);
 # any OpenAI-compatible /v1/responses server is served under the `vllm` id.
 DEFAULT_CODEX_PROVIDER = "vllm"
@@ -232,8 +235,11 @@ def _catalog_entry(
 ) -> dict:
     return {
         "slug": slug,
-        "display_name": slug,
-        "description": f"{slug} via an OpenAI-compatible /v1/responses endpoint.",
+        "display_name": AGENT_MODEL_DISPLAY_NAME,
+        "description": (
+            f"{AGENT_MODEL_DISPLAY_NAME} on {slug} "
+            "via an OpenAI-compatible /v1/responses endpoint."
+        ),
         "default_reasoning_level": reasoning_effort,
         "supported_reasoning_levels": [
             {

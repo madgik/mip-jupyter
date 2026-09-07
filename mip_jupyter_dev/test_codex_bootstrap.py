@@ -11,6 +11,7 @@ from traitlets.utils.importstring import import_item
 
 from mip_jupyter_dev import notebook as notebook_runner
 from mip_jupyter_dev.codex_bootstrap import (
+    AGENT_MODEL_DISPLAY_NAME,
     BASE_INSTRUCTIONS_MAX_CHARS,
     DEFAULT_CODEX_MODEL,
     DEFAULT_CODEX_PERSONA_ID,
@@ -93,7 +94,8 @@ def test_env_budget_overrides_apply_to_catalog(
     assert len(catalog["models"]) == 1
     entry = catalog["models"][0]
     assert entry["slug"] == "acme/Brand-New-Model"
-    assert entry["display_name"] == "acme/Brand-New-Model"
+    assert entry["display_name"] == AGENT_MODEL_DISPLAY_NAME
+    assert "acme/Brand-New-Model" in entry["description"]
     assert entry["context_window"] == 65536
 
 
@@ -127,6 +129,9 @@ def test_model_catalog_contains_single_served_model(tmp_path: Path) -> None:
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
     slugs = [entry["slug"] for entry in catalog["models"]]
     assert slugs == ["RadixArk/Qwen3.8-Flash-Next-NVFP4"]
+
+    assert catalog["models"][0]["display_name"] == AGENT_MODEL_DISPLAY_NAME
+    assert MIP_PERSONA_NAME == AGENT_MODEL_DISPLAY_NAME
 
     model = catalog["models"][0]
     assert model["context_window"] == 131072
