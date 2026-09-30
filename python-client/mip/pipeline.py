@@ -13,6 +13,7 @@ from .labels import sanitize_explain_dict
 from .catalog_registry import PIPELINE_METHOD_NAMES
 from .pipeline_algorithms import PipelineAlgorithmsMixin
 from .request_builder import build_experiment_payload
+from .request_builder import effective_missing_handler
 from .results import Result
 
 
@@ -145,7 +146,8 @@ class Pipeline(PipelineAlgorithmsMixin):
 
     def _preprocessing_user_summary(self) -> list[dict[str, Any]] | None:
         items: list[dict[str, Any]] = []
-        for step in (self.longitudinal, self.handle_missing, self.outlier_handling):
+        handle_missing = effective_missing_handler(self.handle_missing, self.new_columns)
+        for step in (self.longitudinal, handle_missing, self.outlier_handling):
             if step is not None:
                 items.append(step.user_summary())
         for step in self.new_columns:

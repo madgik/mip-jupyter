@@ -7,9 +7,11 @@ from mip import Pipeline
 from mip.catalog_registry import PIPELINE_BACKEND_ALGORITHMS
 from mip.filters import F
 from mip.preprocessing import CategoricalColumnCreator
+from mip.preprocessing import KMeansClusterCreator
 from mip.preprocessing import LongitudinalTransformer
 from mip.preprocessing import MissingValuesHandler
 from mip.preprocessing import OutlierWinsorizer
+from mip.results import Result
 
 
 class Var:
@@ -290,6 +292,107 @@ class TestPipeline(unittest.TestCase):
             parameters,
             {"k_selection": "elbow", "k_min": 2, "k_max": 6, "maxiter": 100, "tol": 0.0001},
         )
+
+REUSABLE_PREPROCESSING = {
+    "schema_version": "1",
+    "preprocessing_name": "kmeans_cluster_creator",
+    "cluster_variables": ["a", "b"],
+    "centers": {
+        "cluster_0": {"a": 1.0, "b": 2.0},
+        "cluster_1": {"a": 3.0, "b": 4.0},
+    },
+    "source_context": {
+        "data_model": "dementia:0.1",
+        "datasets": ["adni"],
+        "input_fingerprint": "abc123",
+    },
+    "available_outputs": [
+        {
+            "output_mode": "new_column",
+            "semantic_operation": "cluster_assignment",
+            "variable_type": "nominal",
+            "number_of_variables": 1,
+            "eligible_roles": ["x", "y"],
+            "cardinality": 2,
+            "selection_rule": "nearest_center",
+        }
+    ],
+    "cluster_choices": [
+        {"cluster_id": "cluster_0", "label": "Cluster 0"},
+        {"cluster_id": "cluster_1", "label": "Cluster 1"},
+    ],
+}
+
+
+def _kmeans_result():
+    return Result(raw={"reusable_preprocessing": REUSABLE_PREPROCESSING}, result_type="kmeans")
+
+
+class TestPipelineKMeansClusterCreator(unittest.TestCase):
+    def _pipeline_inputs(self, transport):
+        dm = _dm(transport)
+        a = Var("a", label="A")
+        b = Var("b", label="B")
+        diagnosis = Var("diagnosis", label="Diagnosis")
+        analysis_set = AnalysisSet(
+            data_model=dm,
+            datasets=[_dataset("adni", "ADNI")],
+            variables=[a, b, diagnosis],
+        )
+        return a, b, diagnosis, analysis_set
+
+    def test_cluster_variables_are_requested_and_dropped_by_default(self):
+        transport = MagicMock()
+        transport.post.return_value = {"status": "success", "result": {}}
+        a, _, diagnosis, analysis_set = self._pipeline_inputs(transport)
+        creator = KMeansClusterCreator(label="Cluster", source=_kmeans_result())
+        handler = MissingValuesHandler(strategies={a: "mean"})
+
+        Pipeline(
+            analysis_set=analysis_set,
+            handle_missing=handler,
+            new_columns=[creator],
+        ).chi_square_test(x=creator.variable, y=diagnosis)
+
+        analysis = transport.post.call_args.args[1]["analysis"]
+        variables = analysis["inputdata"]["variables"]
+        self.assertIn("a", variables)
+        self.assertIn("b", variables)
+        self.assertNotIn("cluster", variables)
+        self.assertEqual(
+            [step["name"] for step in analysis["preprocessing"]],
+            ["missing_values_handler", "kmeans_cluster_creator"],
+        )
+        self.assertEqual(analysis["preprocessing"][0]["parameters"]["strategies"], {"a": "mean", "b": "drop"})
+        self.assertEqual(handler.spec()["parameters"]["strategies"], {"a": "mean"})
+
+    def test_missing_values_handler_is_added_for_cluster_variables(self):
+        transport = MagicMock()
+        transport.post.return_value = {"status": "success", "result": {}}
+        _, _, diagnosis, analysis_set = self._pipeline_inputs(transport)
+        creator = KMeansClusterCreator(label="Cluster", source=_kmeans_result())
+
+        Pipeline(analysis_set=analysis_set, new_columns=[creator]).chi_square_test(
+            x=creator.variable,
+            y=diagnosis,
+        )
+
+        analysis = transport.post.call_args.args[1]["analysis"]
+        self.assertEqual(
+            [step["name"] for step in analysis["preprocessing"]],
+            ["missing_values_handler", "kmeans_cluster_creator"],
+        )
+        self.assertEqual(analysis["preprocessing"][0]["parameters"]["strategies"], {"a": "drop", "b": "drop"})
+
+    def test_summary_shows_cluster_variable_drops(self):
+        _, _, _, analysis_set = self._pipeline_inputs(MagicMock())
+        creator = KMeansClusterCreator(label="Cluster", source=_kmeans_result())
+
+        summary = Pipeline(analysis_set=analysis_set, new_columns=[creator])._preprocessing_user_summary()
+
+        self.assertEqual(summary[0]["name"], "missing_values_handler")
+        self.assertEqual(summary[0]["strategies"], {"a": "drop", "b": "drop"})
+
 
 if __name__ == "__main__":
     unittest.main()

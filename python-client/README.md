@@ -31,8 +31,21 @@ poetry install --with notebook
 | `Pipeline` | Applies filters/preprocessing and executes named algorithms |
 | `F` | Builds backend-compatible filter expressions |
 | `MissingValuesHandler`, `OutlierWinsorizer` | Build preprocessing payloads |
+| `KMeansClusterCreator` | Reuse a K-means result as a categorical cluster column; clustering variables with missing values are dropped |
 | `Result`, `ModelResult` | Wrap raw backend results and logistic-regression sklearn export |
 | `mip.sklearn` | Builds sklearn estimators from supported backend model output |
+
+### Reuse K-means clusters as a column
+
+```python
+clusters = pipeline.kmeans(features=[lefthippocampus, righthippocampus], k=3)
+creator = KMeansClusterCreator(label="Cluster", source=clusters)
+with_clusters = Pipeline(analysis_set=analysis_set, new_columns=[creator])
+with_clusters.chi_square_test(x=creator.variable, y=diagnosis)
+```
+
+The pipeline that uses the column must have the same data model, datasets, and
+filters as the K-means run; otherwise the engine rejects the request.
 
 ## Removed old API
 

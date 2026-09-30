@@ -14,12 +14,17 @@ class TestCatalogRegistry(unittest.TestCase):
     def test_pipeline_registry_has_unique_backend_mappings(self):
         self.assertEqual(len(PIPELINE_BACKEND_ALGORITHMS), len(set(PIPELINE_BACKEND_ALGORITHMS.values())))
 
-    def test_preprocessing_registry_covers_four_steps(self):
-        self.assertEqual(len(PREPROCESSING_STEP_CLASSES), 4)
-        self.assertEqual(len(PREPROCESSING_STEP_NAMES), 4)
+    def test_preprocessing_registry_covers_five_steps(self):
+        self.assertEqual(len(PREPROCESSING_STEP_CLASSES), 5)
         self.assertEqual(
             set(PREPROCESSING_STEP_NAMES),
-            {cls.name for cls in PREPROCESSING_STEP_CLASSES},
+            {
+                "longitudinal_transformer",
+                "missing_values_handler",
+                "outlier_winsorizer",
+                "categorical_column_creator",
+                "kmeans_cluster_creator",
+            },
         )
 
 

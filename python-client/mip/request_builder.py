@@ -9,6 +9,7 @@ from typing import Sequence
 from .derived import DerivedVariable
 from .labels import internal_code
 from .preprocessing import LONGITUDINAL_REQUIRED_VARIABLES
+from .preprocessing import MissingValuesHandler
 
 
 def code(value: Any) -> str:
@@ -96,6 +97,8 @@ def collect_source_variables(
     for creator in new_columns or []:
         for field in collect_filter_fields_from_rules(getattr(creator, "rules", None)):
             add(field)
+        for variable in getattr(creator, "cluster_variables", None) or []:
+            add(variable)
     for item in algorithm_x or []:
         add(item)
     for item in algorithm_y or []:
@@ -156,6 +159,27 @@ def serialize_algorithm_roles(
     return x_payload, y_payload
 
 
+def collect_cluster_variables(new_columns: Iterable[Any] | None) -> list[str]:
+    """Cluster source variables required by K-means cluster creators, deduped in order."""
+    codes = (
+        code(variable)
+        for creator in new_columns or []
+        for variable in getattr(creator, "cluster_variables", None) or []
+    )
+    return list(dict.fromkeys(item for item in codes if item))
+
+
+def effective_missing_handler(handle_missing: Any, new_columns: Iterable[Any] | None) -> Any:
+    """User missing-values handler plus a ``drop`` for each K-means cluster variable it does not handle."""
+    cluster_variables = collect_cluster_variables(new_columns)
+    if not cluster_variables:
+        return handle_missing
+    strategies = dict(getattr(handle_missing, "_strategies", None) or {})
+    handled = {code(key) for key in strategies}
+    strategies.update({variable: "drop" for variable in cluster_variables if variable not in handled})
+    return MissingValuesHandler(strategies=strategies, fill_values=getattr(handle_missing, "_fill_values", None))
+
+
 def build_preprocessing_steps(
     *,
     longitudinal: Any = None,
@@ -163,12 +187,13 @@ def build_preprocessing_steps(
     outlier_handling: Any = None,
     new_columns: Iterable[Any] | None = None,
 ) -> list[dict[str, Any]] | None:
+    new_columns = list(new_columns or [])
     steps: list[dict[str, Any]] = []
-    for step in (longitudinal, handle_missing, outlier_handling):
+    for step in (longitudinal, effective_missing_handler(handle_missing, new_columns), outlier_handling):
         if step is None:
             continue
         steps.append(step.spec())
-    for creator in new_columns or []:
+    for creator in new_columns:
         steps.append(creator.spec())
     return steps or None
 

@@ -1,8 +1,10 @@
 import unittest
 
+from mip.preprocessing import KMeansClusterCreator
 from mip.preprocessing import LongitudinalTransformer
 from mip.preprocessing import MissingValuesHandler
 from mip.preprocessing import OutlierWinsorizer
+from mip.results import Result
 
 
 class Var:
@@ -59,6 +61,88 @@ class TestPreprocessing(unittest.TestCase):
             transformer.user_summary()["strategies"],
             {"Age": "diff", "MMSE": "second"},
         )
+
+
+REUSABLE_PREPROCESSING = {
+    "schema_version": "1",
+    "preprocessing_name": "kmeans_cluster_creator",
+    "cluster_variables": ["lefthippocampus", "righthippocampus"],
+    "centers": {
+        "cluster_0": {"lefthippocampus": 1.0, "righthippocampus": 2.0},
+        "cluster_1": {"lefthippocampus": 3.0, "righthippocampus": 4.0},
+        "cluster_2": {"lefthippocampus": 5.0, "righthippocampus": 6.0},
+    },
+    "source_context": {
+        "data_model": "dementia:0.1",
+        "datasets": ["adni"],
+        "input_fingerprint": "abc123",
+    },
+    "available_outputs": [
+        {
+            "output_mode": "new_column",
+            "semantic_operation": "cluster_assignment",
+            "variable_type": "nominal",
+            "number_of_variables": 1,
+            "eligible_roles": ["x", "y"],
+            "cardinality": 3,
+            "selection_rule": "nearest_center",
+        }
+    ],
+    "cluster_choices": [
+        {"cluster_id": "cluster_0", "label": "Cluster 0"},
+        {"cluster_id": "cluster_1", "label": "Cluster 1"},
+        {"cluster_id": "cluster_2", "label": "Cluster 2"},
+    ],
+}
+
+
+class TestKMeansClusterCreator(unittest.TestCase):
+    def test_spec_serializes_code_and_reusable_preprocessing_verbatim(self):
+        creator = KMeansClusterCreator(
+            label="Hippocampus cluster",
+            source=Result(raw={"reusable_preprocessing": REUSABLE_PREPROCESSING}, result_type="kmeans"),
+        )
+        spec = creator.spec()
+
+        self.assertEqual(spec["name"], "kmeans_cluster_creator")
+        self.assertEqual(spec["parameters"]["code"], "hippocampus_cluster")
+        self.assertEqual(spec["parameters"]["reusable_preprocessing"], REUSABLE_PREPROCESSING)
+
+    def test_variable_enumerations_are_cluster_ids(self):
+        creator = KMeansClusterCreator(
+            label="Hippocampus cluster",
+            source=Result(raw={"reusable_preprocessing": REUSABLE_PREPROCESSING}, result_type="kmeans"),
+        )
+
+        self.assertEqual(creator.enumerations, ["cluster_0", "cluster_1", "cluster_2"])
+        self.assertEqual(creator.variable.categories(), ["cluster_0", "cluster_1", "cluster_2"])
+        self.assertTrue(creator.variable.is_categorical())
+        self.assertEqual(creator.cluster_variables, ["lefthippocampus", "righthippocampus"])
+
+    def test_user_summary_lists_label_categories_and_cluster_variables(self):
+        creator = KMeansClusterCreator(
+            label="Hippocampus cluster",
+            source=Result(raw={"reusable_preprocessing": REUSABLE_PREPROCESSING}, result_type="kmeans"),
+        )
+
+        self.assertEqual(
+            creator.user_summary(),
+            {
+                "name": "kmeans_cluster_creator",
+                "label": "Hippocampus cluster",
+                "categories": ["cluster_0", "cluster_1", "cluster_2"],
+                "cluster_variables": ["lefthippocampus", "righthippocampus"],
+            },
+        )
+
+    def test_raises_when_result_has_no_reusable_preprocessing(self):
+        with self.assertRaises(ValueError):
+            KMeansClusterCreator(label="Cluster", source=Result(raw={}, result_type="kmeans"))
+        with self.assertRaises(ValueError):
+            KMeansClusterCreator(
+                label="Cluster",
+                source=Result(raw={"reusable_preprocessing": None}, result_type="kmeans"),
+            )
 
 
 if __name__ == "__main__":

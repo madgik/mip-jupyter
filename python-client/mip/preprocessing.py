@@ -9,6 +9,7 @@ from .derived import DerivedVariable
 from .labels import internal_code
 from .labels import public_label
 from .labels import sanitize_mapping_keys
+from .results import Result
 
 
 def _serialize_mapping(values: Mapping[Any, Any] | None) -> dict[str, Any]:
@@ -171,10 +172,45 @@ class CategoricalColumnCreator(PreprocessingStep):
         }
 
 
+class KMeansClusterCreator(PreprocessingStep):
+    name = "kmeans_cluster_creator"
+
+    def __init__(self, *, label: str, source: Result):
+        self.label = label
+        raw = getattr(source, "raw", None)
+        reusable = raw.get("reusable_preprocessing") if isinstance(raw, dict) else None
+        if not isinstance(reusable, dict):
+            raise ValueError(
+                "This K-means result has no reusable_preprocessing; re-run kmeans to reuse its clusters."
+            )
+        self._code = DerivedVariable(label=label)._code
+        self.cluster_variables = list(reusable.get("cluster_variables") or [])
+        self.variable = DerivedVariable(
+            label=label,
+            enumerations=[choice["cluster_id"] for choice in reusable.get("cluster_choices") or []],
+            created_by=self.name,
+            _code=self._code,
+        )
+        self._parameters = {"code": self._code, "reusable_preprocessing": reusable}
+
+    @property
+    def enumerations(self) -> list[str]:
+        return self.variable.categories()
+
+    def user_summary(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "label": self.label,
+            "categories": self.enumerations,
+            "cluster_variables": self.cluster_variables,
+        }
+
+
 PREPROCESSING_STEP_CLASSES = (
     LongitudinalTransformer,
     MissingValuesHandler,
     OutlierWinsorizer,
     CategoricalColumnCreator,
+    KMeansClusterCreator,
 )
 PREPROCESSING_STEP_NAMES: tuple[str, ...] = tuple(cls.name for cls in PREPROCESSING_STEP_CLASSES)
