@@ -28,7 +28,7 @@ http://127.0.0.1:8888/lab/tree/examples/feres_analysis.ipynb?token=dev
 
 ## Install Codex ACP
 
-Install the Codex CLI and confirm the executable is available:
+Optionally install the Codex CLI for local debugging (the image ships only codex-acp):
 
 ```bash
 npm install -g @openai/codex

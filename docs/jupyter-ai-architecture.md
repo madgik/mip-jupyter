@@ -10,7 +10,7 @@ flowchart LR
     subgraph JL["JupyterLab container"]
         Chat["Jupyter AI Chat"]
         MCP["Jupyter MCP Server<br/>(curated tools)"]
-        Codex["codex-acp + Codex CLI"]
+        Codex["codex-acp"]
         CLI["jupyter_mcp_cli<br/>(shell bridge)"]
 
         Chat -->|"ACP"| Codex
