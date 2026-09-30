@@ -118,20 +118,60 @@ if _codex_base_url:
         _spawner_env["CODEX_AUTO_COMPACT_TOKEN_LIMIT"] = _codex_compact
 c.KubeSpawner.environment = _spawner_env
 
-# Persistence configuration.
+# Pin user pods (and hostpath volumes) to the hub node when set, e.g. master=true.
+_node_selector = _env("JUPYTER_NODE_SELECTOR")
+if _node_selector:
+    c.KubeSpawner.node_selector = {
+        key.strip(): value.strip()
+        for key, value in (pair.split("=", 1) for pair in _node_selector.split(",") if "=" in pair)
+    }
+
+# Persistence: storage_class/capacity alone do not mount a volume.
+c.KubeSpawner.storage_pvc_ensure = _env_bool("JUPYTER_STORAGE_PVC_ENSURE", True)
 c.KubeSpawner.storage_class = _env("JUPYTER_STORAGE_CLASS", "k8s-local-storage")
 c.KubeSpawner.storage_capacity = _env("JUPYTER_STORAGE_CAPACITY", "2Gi")
+if c.KubeSpawner.storage_pvc_ensure:
+    c.KubeSpawner.volumes = [
+        {
+            "name": "home",
+            "persistentVolumeClaim": {"claimName": "{pvc_name}"},
+        }
+    ]
+    c.KubeSpawner.volume_mounts = [
+        {
+            "name": "home",
+            "mountPath": "/home/jovyan",
+        }
+    ]
+    # Hostpath PVCs are root-owned; chown once (skip the recursive walk when already owned).
+    c.KubeSpawner.init_containers = [
+        {
+            "name": "fix-home-perm",
+            "image": _env("JUPYTER_SINGLEUSER_IMAGE", "hbpmip/mip-jupyter:dev"),
+            "command": [
+                "sh",
+                "-c",
+                '[ "$(stat -c %u:%g /mnt/home)" = 1000:100 ] || chown -R 1000:100 /mnt/home; '
+                "mkdir -p /mnt/home/work && chown 1000:100 /mnt/home/work",
+            ],
+            "volumeMounts": [{"name": "home", "mountPath": "/mnt/home"}],
+            "securityContext": {"runAsUser": 0, "runAsGroup": 0},
+        }
+    ]
 
-# Resource limits for spawned notebooks.
+# Resource limits for spawned notebooks. Set JUPYTER_MEM_LIMIT=none to drop the cgroup cap.
 c.KubeSpawner.cpu_limit = normalize_cpu(_env("JUPYTER_CPU_LIMIT", "1"))
-c.KubeSpawner.mem_limit = normalize_memory(_env("JUPYTER_MEM_LIMIT", "1G"))
 c.KubeSpawner.cpu_guarantee = normalize_cpu(_env("JUPYTER_CPU_GUARANTEE", "500m"))
-c.KubeSpawner.mem_guarantee = normalize_memory(_env("JUPYTER_MEM_GUARANTEE", "512M"))
+c.KubeSpawner.mem_guarantee = normalize_memory(_env("JUPYTER_MEM_GUARANTEE", "1G"))
+_mem_limit = _env("JUPYTER_MEM_LIMIT", "4G")
+if _mem_limit.strip().lower() not in {"", "0", "none", "unlimited"}:
+    c.KubeSpawner.mem_limit = normalize_memory(_mem_limit)
 
 # Security: ensure pods run as the jovyan user.
 c.KubeSpawner.pod_security_context = {
     "fsGroup": 100,
     "runAsUser": 1000,
+    "fsGroupChangePolicy": "OnRootMismatch",
 }
 
 
