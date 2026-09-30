@@ -1,5 +1,14 @@
 .git
+.github
 .codegraph
+.llm
+scripts
+docker/hub/test_*.py
+python-client/tests
+python-client/verify_script.py
+python-client/conftest.py
+mip_jupyter_dev/test_*.py
+*.chat
 
 # Virtualenvs (be explicit — nested client .venv is ~290MB)
 .venv
@@ -48,8 +57,6 @@ mip_token
 *~
 .DS_Store
 Thumbs.db
-untitled.chat
 
-# Lockfiles are not needed inside the image build context for uv pip install .
-uv.lock
-**/uv.lock
+# Root uv.lock is used by `uv sync --locked`; the client's own lock is not.
+python-client/uv.lock
