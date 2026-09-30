@@ -158,6 +158,17 @@ class TestResults(unittest.TestCase):
         self.assertEqual(row["size"], "10-14")
         self.assertEqual(row["center_size"], 2.0)
 
+    def test_standardized_mean_difference_to_frame(self):
+        result = Result(
+            raw={"comparisons": [{"group1": "x", "group2": "y", "smd": 0.5}]},
+            result_type="standardized_mean_difference",
+        )
+        frame = result.to_frame()
+        self.assertEqual(len(frame), 1)
+        self.assertEqual(frame.iloc[0]["smd"], 0.5)
+        self.assertEqual(frame.iloc[0]["group1"], "x")
+        self.assertEqual(frame.iloc[0]["group2"], "y")
+
     def test_plot_labels_histogram(self):
         result = Result(
             raw={"variable": "MMSE", "bins": ["a", "b"], "counts": [3, 7]},

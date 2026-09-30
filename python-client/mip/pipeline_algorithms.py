@@ -241,6 +241,22 @@ class PipelineAlgorithmsMixin:
             result_type="mann_whitney_u_test",
         )
 
+    def standardized_mean_difference(
+        self,
+        *,
+        variable: Any,
+        group_by: Any,
+        mode: str = "transient",
+    ) -> Result:
+        return self._execute_algorithm(
+            "standardized_mean_difference",
+            algorithm_x=[group_by],
+            algorithm_y=[variable],
+            parameters={},
+            mode=mode,
+            name_for_ui=f"Standardized mean difference: {public_label(variable)}",
+        )
+
     def outlier_report(
         self,
         *,

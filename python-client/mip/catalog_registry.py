@@ -16,6 +16,7 @@ PIPELINE_BACKEND_ALGORITHMS: dict[str, str] = {
     "anova_oneway": "anova_oneway",
     "anova_twoway": "anova_twoway",
     "mann_whitney_u_test": "binned_mann_whitney_u_test",
+    "standardized_mean_difference": "standardized_mean_difference",
     "outlier_report": "outlier_report",
     "linear_regression": "linear_regression",
     "linear_regression_cv": "linear_regression_cv",

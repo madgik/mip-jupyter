@@ -293,6 +293,31 @@ class TestPipeline(unittest.TestCase):
             {"k_selection": "elbow", "k_min": 2, "k_max": 6, "maxiter": 100, "tol": 0.0001},
         )
 
+    def test_standardized_mean_difference_posts_expected_payload(self):
+        transport = MagicMock()
+        transport.post.return_value = {"status": "success", "result": {"comparisons": []}}
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        diagnosis = Var("diagnosis", label="Diagnosis")
+        analysis_set = AnalysisSet(
+            data_model=dm,
+            datasets=[_dataset("adni", "ADNI")],
+            variables=[age, diagnosis],
+        )
+
+        result = Pipeline(analysis_set=analysis_set).standardized_mean_difference(
+            variable=age,
+            group_by=diagnosis,
+        )
+
+        analysis = transport.post.call_args.args[1]["analysis"]
+        self.assertEqual(analysis["algorithm"]["name"], "standardized_mean_difference")
+        self.assertEqual(analysis["algorithm"]["x"], ["diagnosis"])
+        self.assertEqual(analysis["algorithm"]["y"], ["age"])
+        self.assertEqual(analysis["algorithm"]["parameters"], {})
+        self.assertEqual(result.result_type, "standardized_mean_difference")
+
+
 REUSABLE_PREPROCESSING = {
     "schema_version": "1",
     "preprocessing_name": "kmeans_cluster_creator",

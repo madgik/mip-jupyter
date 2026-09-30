@@ -462,6 +462,15 @@ def result_table_rows(result_type: str | None, raw: Any) -> list[dict[str, Any]]
         return _linear_rows(payload)
     if kind == "kmeans":
         return _kmeans_rows(payload)
+    if kind == "standardized_mean_difference":
+        return [
+            {
+                "group1": comparison.get("group1"),
+                "group2": comparison.get("group2"),
+                "smd": comparison.get("smd"),
+            }
+            for comparison in payload.get("comparisons") or []
+        ]
     return []
 
 
