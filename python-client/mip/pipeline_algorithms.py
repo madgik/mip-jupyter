@@ -476,15 +476,38 @@ class PipelineAlgorithmsMixin:
         self,
         *,
         features: Sequence[Any],
-        k: int = 4,
-        maxiter: int = 1,
-        tol: float = 0.01,
+        k_selection: str = "manual",
+        k: int | None = None,
+        k_min: int | None = None,
+        k_max: int | None = None,
+        maxiter: int = 100,
+        tol: float = 0.0001,
+        init_method: str | None = None,
+        n_init: int | None = None,
+        random_state: int | None = None,
         mode: str = "transient",
     ) -> Result:
+        parameters: dict[str, Any] = {
+            "k_selection": k_selection,
+            "maxiter": maxiter,
+            "tol": tol,
+        }
+        if k is not None:
+            parameters["k"] = k
+        if k_min is not None:
+            parameters["k_min"] = k_min
+        if k_max is not None:
+            parameters["k_max"] = k_max
+        if init_method is not None:
+            parameters["init_method"] = init_method
+        if n_init is not None:
+            parameters["n_init"] = n_init
+        if random_state is not None:
+            parameters["random_state"] = random_state
         return self._execute_algorithm(
             "kmeans",
             algorithm_y=list(features),
-            parameters={"k": k, "maxiter": maxiter, "tol": tol},
+            parameters=parameters,
             mode=mode,
             name_for_ui="K-means clustering",
         )

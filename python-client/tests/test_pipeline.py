@@ -244,5 +244,52 @@ class TestPipeline(unittest.TestCase):
         self.assertIn("mmse", variables)
 
 
+    def test_kmeans_sends_manual_selection_parameters(self):
+        transport = MagicMock()
+        transport.post.return_value = {"status": "success", "result": {}}
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        mmse = Var("mmse", label="MMSE")
+        analysis_set = AnalysisSet(
+            data_model=dm,
+            datasets=[_dataset("adni", "ADNI")],
+            variables=[age, mmse],
+        )
+
+        Pipeline(analysis_set=analysis_set).kmeans(features=[age, mmse])
+
+        analysis = transport.post.call_args.args[1]["analysis"]
+        self.assertEqual(analysis["algorithm"]["name"], "kmeans")
+        self.assertEqual(analysis["algorithm"]["y"], ["age", "mmse"])
+        self.assertEqual(
+            analysis["algorithm"]["parameters"],
+            {"k_selection": "manual", "maxiter": 100, "tol": 0.0001},
+        )
+
+    def test_kmeans_sends_elbow_selection_parameters(self):
+        transport = MagicMock()
+        transport.post.return_value = {"status": "success", "result": {}}
+        dm = _dm(transport)
+        age = Var("age", label="Age")
+        mmse = Var("mmse", label="MMSE")
+        analysis_set = AnalysisSet(
+            data_model=dm,
+            datasets=[_dataset("adni", "ADNI")],
+            variables=[age, mmse],
+        )
+
+        Pipeline(analysis_set=analysis_set).kmeans(
+            features=[age, mmse],
+            k_selection="elbow",
+            k_min=2,
+            k_max=6,
+        )
+
+        parameters = transport.post.call_args.args[1]["analysis"]["algorithm"]["parameters"]
+        self.assertEqual(
+            parameters,
+            {"k_selection": "elbow", "k_min": 2, "k_max": 6, "maxiter": 100, "tol": 0.0001},
+        )
+
 if __name__ == "__main__":
     unittest.main()

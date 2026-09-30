@@ -410,6 +410,12 @@ def result_highlights(result_type: str | None, raw: Any) -> dict[str, Any]:
     if kind in {"linear_regression", "linear_regression_cv"}:
         return _pick_fields(payload, ("n_obs", "r2", "rmse", "intercept"))
 
+    if kind == "kmeans":
+        return _pick_fields(
+            payload,
+            ("k_selection", "selected_k", "n_obs_interval", "converged", "n_iter"),
+        )
+
     if not payload:
         return {"hint": "Call .summary() for the backend payload"}
     keys = list(payload.keys())[:6]
@@ -454,6 +460,8 @@ def result_table_rows(result_type: str | None, raw: Any) -> list[dict[str, Any]]
         return _pearson_rows(payload)
     if kind in {"linear_regression", "linear_regression_cv"}:
         return _linear_rows(payload)
+    if kind == "kmeans":
+        return _kmeans_rows(payload)
     return []
 
 
@@ -627,6 +635,20 @@ def _linear_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
             for index, name in enumerate(names)
         ]
     return [_pick_fields(payload, ("n_obs", "r2", "rmse", "intercept"))]
+
+
+def _kmeans_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows = []
+    for cluster in payload.get("clusters") or []:
+        row = {
+            "cluster_id": cluster.get("cluster_id"),
+            "cluster": cluster.get("label"),
+            "size": cluster.get("size_interval"),
+        }
+        for feature, value in (cluster.get("center") or {}).items():
+            row[f"center_{feature}" if feature in row else feature] = value
+        rows.append(row)
+    return rows
 
 
 def _pearson_rows(payload: Mapping[str, Any]) -> list[dict[str, Any]]:

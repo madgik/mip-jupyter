@@ -104,6 +104,60 @@ class TestResults(unittest.TestCase):
         with self.assertRaises(UnsupportedOperationError):
             Result(raw={"opaque": True}, result_type="kmeans").to_frame()
 
+    def test_kmeans_to_frame_and_highlights(self):
+        result = Result(
+            raw={
+                "variables": ["a", "b"],
+                "clusters": [
+                    {
+                        "cluster_id": "cluster_0",
+                        "label": "Cluster 0",
+                        "size_interval": "10-14",
+                        "center": {"a": 1.0, "b": 2.0},
+                    },
+                    {
+                        "cluster_id": "cluster_1",
+                        "label": "Cluster 1",
+                        "size_interval": "10-14",
+                        "center": {"a": 3.0, "b": 4.0},
+                    },
+                ],
+                "selected_k": 2,
+                "k_selection": "manual",
+                "n_obs_interval": "20-24",
+                "converged": True,
+                "n_iter": 3,
+                "elbow": None,
+                "reusable_preprocessing": None,
+            },
+            result_type="kmeans",
+        )
+        frame = result.to_frame()
+        self.assertEqual(len(frame), 2)
+        self.assertIn("cluster", frame.columns)
+        self.assertIn("size", frame.columns)
+        self.assertIn("a", frame.columns)
+        self.assertIn("b", frame.columns)
+        self.assertEqual(frame["cluster_id"].tolist(), ["cluster_0", "cluster_1"])
+        self.assertEqual(frame["cluster"].tolist(), ["Cluster 0", "Cluster 1"])
+        self.assertEqual(frame["size"].tolist(), ["10-14", "10-14"])
+        self.assertEqual(frame["a"].tolist(), [1.0, 3.0])
+        highlights = result.highlights()
+        self.assertEqual(highlights["selected_k"], 2)
+        self.assertEqual(highlights["k_selection"], "manual")
+        self.assertEqual(highlights["n_obs_interval"], "20-24")
+        self.assertEqual(highlights["converged"], True)
+        self.assertEqual(highlights["n_iter"], 3)
+
+    def test_kmeans_center_feature_named_like_identity_column_is_prefixed(self):
+        result = Result(
+            raw={"clusters": [{"cluster_id": "cluster_0", "label": "Cluster 0", "size_interval": "10-14", "center": {"size": 2.0}}]},
+            result_type="kmeans",
+        )
+        row = result.to_frame().iloc[0]
+        self.assertEqual(row["size"], "10-14")
+        self.assertEqual(row["center_size"], 2.0)
+
     def test_plot_labels_histogram(self):
         result = Result(
             raw={"variable": "MMSE", "bins": ["a", "b"], "counts": [3, 7]},
