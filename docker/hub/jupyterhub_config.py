@@ -89,7 +89,16 @@ else:
 
 c.Authenticator.enable_auth_state = True
 
-c.JupyterHub.spawner_class = "kubespawner.KubeSpawner"
+# "operator": the hub only creates Notebook resources and the MIP notebook
+# operator builds the pods (docs/notebook-operator.md). "kubespawner": the hub
+# creates pods itself and needs a Role on pods/PVCs.
+_spawner_mode = _env("JUPYTERHUB_SPAWNER", "kubespawner").strip().lower()
+if _spawner_mode == "operator":
+    c.JupyterHub.spawner_class = "notebook_spawner.NotebookSpawner"
+    # Covers a cold pull of the ~700 MB notebook image.
+    c.NotebookSpawner.start_timeout = 300
+else:
+    c.JupyterHub.spawner_class = "kubespawner.KubeSpawner"
 c.KubeSpawner.image = _env("JUPYTER_SINGLEUSER_IMAGE", "hbpmip/mip-jupyter:dev")
 c.KubeSpawner.image_pull_policy = _env("JUPYTER_IMAGE_PULL_POLICY", "Always")
 c.KubeSpawner.namespace = _env("JUPYTERHUB_NAMESPACE", os.environ.get("POD_NAMESPACE", "default"))
@@ -190,7 +199,10 @@ async def inject_platform_token(spawner):
         spawner.environment["MIP_TOKEN"] = token
 
 
-c.Spawner.pre_spawn_hook = inject_platform_token
+# With the operator the token is not put in the pod env; the mip client fetches
+# it from /api/platform-token instead.
+if _spawner_mode != "operator":
+    c.Spawner.pre_spawn_hook = inject_platform_token
 
 c.JupyterHub.extra_handlers = [
     (r"/api/platform-token", PlatformTokenHandler),

@@ -8,6 +8,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
         oauthenticator
 
 COPY docker/hub/jupyterhub_config.py \
+     docker/hub/notebook_spawner.py \
      docker/hub/platform_token_service.py \
      docker/hub/platform_token_utils.py \
      /etc/jupyterhub/

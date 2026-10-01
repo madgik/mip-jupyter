@@ -678,6 +678,10 @@ async def mip_env_status() -> dict[str, Any]:
     backend_configured = any(os.getenv(name) for name in ("PLATFORM_BACKEND_URL", "MIP_BASE_URL"))
 
     token_configured = any(os.getenv(name) for name in ("PLATFORM_TOKEN", "MIP_TOKEN"))
+    # Under the notebook operator the hub hands the token out on first use.
+    token_configured = token_configured or bool(
+        os.getenv("JUPYTERHUB_API_URL") and os.getenv("JUPYTERHUB_API_TOKEN")
+    )
     if not token_configured:
         token_configured = any(
             token_file.is_file() and token_file.stat().st_size > 0

@@ -32,6 +32,23 @@ jobs:
       - name: Whitespace check
         run: git diff --check
 
+  operator:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: operator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: operator/go.mod
+          cache-dependency-path: operator/go.sum
+      # Regenerates CRDs/RBAC/deepcopy first; a diff means they were not committed.
+      - name: Generated files are up to date
+        run: make manifests generate && git diff --exit-code
+      - name: Controller tests (envtest)
+        run: make test
+
   docker:
     runs-on: ubuntu-latest
     steps:
@@ -58,5 +75,18 @@ jobs:
           load: true
           cache-from: type=gha,scope=hub
           cache-to: type=gha,scope=hub,mode=max
+      - name: Build notebook operator image
+        uses: docker/build-push-action@v6
+        with:
+          context: operator
+          platforms: linux/amd64
+          tags: mip-notebook-operator:ci
+          cache-from: type=gha,scope=operator
+          cache-to: type=gha,scope=operator,mode=max
+      - name: Hub NotebookSpawner tests
+        run: >-
+          docker run --rm -w /etc/jupyterhub
+          -v "$PWD/docker/hub/test_notebook_spawner.py:/etc/jupyterhub/test_notebook_spawner.py:ro"
+          mip-jupyterhub:ci python -m unittest test_notebook_spawner
       - name: Single-user image smoke
         run: scripts/smoke-singleuser-image.sh mip-jupyter:ci

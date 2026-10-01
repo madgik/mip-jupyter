@@ -148,6 +148,31 @@ class TestTransport(unittest.TestCase):
 
     @patch("mip.transport.requests.get")
     @patch("mip.transport.requests.Session")
+    def test_missing_token_is_fetched_from_jupyterhub(self, session_cls, get_mock):
+        fresh = _make_jwt(int(time.time()) + 3600)
+        get_mock.return_value = MagicMock(
+            status_code=200, content=b"{}", json=lambda: {"access_token": fresh}
+        )
+        backend_response = MagicMock(status_code=200, content=b'{"ok": true}')
+        backend_response.json.return_value = {"ok": True}
+        session_cls.return_value.request.return_value = backend_response
+
+        env = {
+            "JUPYTERHUB_API_URL": "http://jupyterhub:8081/notebook/hub/api",
+            "JUPYTERHUB_API_TOKEN": "hub-token",
+        }
+        with patch.dict(os.environ, env, clear=True):
+            transport = Transport("http://backend/services")
+            self.assertEqual(transport.get("/data-models"), {"ok": True})
+            self.assertEqual(transport.token, fresh)
+            self.assertEqual(os.environ["MIP_TOKEN"], fresh)
+            get_mock.assert_called_once()
+            self.assertEqual(
+                get_mock.call_args.args[0], "http://jupyterhub:8081/notebook/hub/api/platform-token"
+            )
+
+    @patch("mip.transport.requests.get")
+    @patch("mip.transport.requests.Session")
     def test_expired_token_without_refresh_raises(self, session_cls, get_mock):
         expired = _make_jwt(int(time.time()) - 60)
         get_mock.return_value = MagicMock(status_code=401, content=b"", json=lambda: {})

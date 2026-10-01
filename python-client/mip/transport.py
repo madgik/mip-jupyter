@@ -103,6 +103,9 @@ class Transport:
 
     def _raise_if_expired_token(self) -> None:
         if not self.token:
+            # Under the notebook operator the token is not in the pod env; the
+            # hub hands it out on first use.
+            self._maybe_refresh_token_via_jupyterhub()
             return
         payload = self._decode_jwt_payload(self.token)
         exp = payload.get("exp")
