@@ -13,6 +13,14 @@ if [ ! -f "${WORK}/Welcome.ipynb" ]; then
   cp -a "${TEMPLATE}/." "${WORK}/"
 fi
 
+# Existing homes skip the copy above; give them examples added since, never
+# overwriting a file the user already has (they may have edited it).
+mkdir -p "${WORK}/examples"
+for example in "${TEMPLATE}"/examples/*; do
+  [ -e "${example}" ] || continue
+  [ -e "${WORK}/examples/${example##*/}" ] || cp -a "${example}" "${WORK}/examples/"
+done
+
 # Trust shipped notebooks so execution/output rendering is not blocked in Lab.
 find "${WORK}" -name '*.ipynb' -exec jupyter trust {} + 2>/dev/null || true
 
