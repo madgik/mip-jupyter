@@ -157,23 +157,6 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _sync_scratch_templates(repo: Path) -> None:
-    """Mirror templates/scratch into workspace/scratch for local Jupyter parity."""
-    src = repo / "workspace" / "templates" / "scratch"
-    dest = repo / "workspace" / "scratch"
-    if not src.is_dir():
-        return
-    dest.mkdir(parents=True, exist_ok=True)
-    for path in sorted(src.iterdir()):
-        if not path.is_file():
-            continue
-        if path.suffix not in {".py", ".md"}:
-            continue
-        target = dest / path.name
-        if not target.exists():
-            shutil.copy2(path, target)
-
-
 def _sync_workspace_user_docs(repo: Path) -> None:
     """Mirror docs/user into workspace/docs for local Jupyter parity with production."""
     src = repo / "docs" / "user"
@@ -273,7 +256,6 @@ def main(argv: list[str] | None = None) -> int:
     work = root / "workspace"
     notebook = _notebook_under_workspace(args.notebook)
     _sync_workspace_user_docs(root)
-    _sync_scratch_templates(root)
 
     env = os.environ.copy()
     env.setdefault("MIP_JUPYTER_ROOT", str(work))

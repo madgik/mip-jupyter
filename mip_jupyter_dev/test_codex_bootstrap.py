@@ -150,7 +150,6 @@ def test_model_catalog_contains_single_served_model(tmp_path: Path) -> None:
     assert PRIVACY_RULES in model["base_instructions"]
     assert ROUTING_RULES in model["base_instructions"]
     assert "available_algorithms" not in model["base_instructions"]
-    assert "stroke_preflight" not in model["base_instructions"]
     assert "write_stdin" in model["base_instructions"]
     assert "Subcommands:" not in model["base_instructions"]
     assert "never native mcp__*" in model["base_instructions"]

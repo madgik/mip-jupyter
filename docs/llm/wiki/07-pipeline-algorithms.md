@@ -59,6 +59,7 @@ Signatures: copy from `algorithm_examples.py`. Contributor registry updates:
 
 Others: `summarize()` in `algorithm_examples.py`. Federated aggregates only; pass
 **creators** in `new_columns`; filter enums often codes (`"0"`/`"1"`). Stroke:
-run `scratch/stroke_preflight.py` before inference-heavy scripts.
+check SSR coverage with `describe()` (`recipes/stroke-analysis` step 3) before
+inference-heavy scripts.
 
 **Next file:** `algorithm_examples.py` or `02-analysis-workflow.md`.

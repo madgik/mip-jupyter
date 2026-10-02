@@ -29,12 +29,12 @@ Write the whole analysis as **ONE** `scratch/<name>.py` with `# %%` cell markers
 
 | Phase | Action |
 |-------|--------|
-| **A — Discovery** | `jupyter-mcp mip-env-status`, `mip-data-model-summary stroke --version 3.7`, `python scratch/stroke_preflight.py` |
+| **A — Discovery** | `jupyter-mcp mip-env-status`, `mip-data-model-summary stroke --version 3.7`, SSR coverage (`recipes/stroke-analysis` step 3) |
 | **B — Catalog audit** | `jupyter-mcp mip-algorithm-summary`, `jupyter-mcp read-guide --page 07-pipeline-algorithms`; signatures from `examples/algorithm_examples.py` |
 | **C — Novel analysis** | `jupyter-mcp scratch-write-file scratch/<name>.py` — ONE script for one hypothesis, `# %%` markers, `scratch-replace-snippet` for fixes, **`python scratch/<name>.py`** until exit 0 |
 | **D — Notebook** | `jupyter-mcp scratch-to-notebook`, `notebook-outline`, `open-file` |
 
-Do **not** stop after Phase B metadata alone. Complete Phase C unless preflight fails.
+Do **not** stop after Phase B metadata alone. Complete Phase C unless coverage fails.
 Do **not** stop at a verified `.py` alone — finish Phase D unless the user asked for a script only.
 
 ## Resume after tool-call error

@@ -1,3 +1,10 @@
+# Only tracked workspace files may reach the image: the single-user Dockerfile
+# COPYs workspace/ into every new home, and local runs leave tokens, chats,
+# scratch and a docs symlink there. The patterns below still apply inside.
+workspace/*
+!workspace/Welcome.ipynb
+!workspace/examples/
+
 .git
 .github
 .codegraph
@@ -8,7 +15,7 @@ python-client/tests
 python-client/verify_script.py
 python-client/conftest.py
 mip_jupyter_dev/test_*.py
-*.chat
+**/*.chat
 
 # Virtualenvs (be explicit — nested client .venv is ~290MB)
 .venv
@@ -44,10 +51,10 @@ pip-wheel-metadata
 .ipynb_checkpoints
 **/.ipynb_checkpoints
 
-.env
-.env.*
-.mip_token
-mip_token
+**/.env
+**/.env.*
+**/.mip_token
+**/mip_token
 .cursor
 .aider*
 .idea

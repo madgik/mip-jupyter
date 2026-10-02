@@ -342,7 +342,7 @@ class TestJupyterMcpTools(unittest.TestCase):
         self.assertLessEqual(len(result["items"]), tools.MAX_LIST_ITEMS)
         self.assertLessEqual(len(result["items"][0]["label"]), tools.MAX_METADATA_STRING_CHARS)
 
-    def test_stroke_recipe_allowlist_includes_preflight_guidance(self):
+    def test_stroke_recipe_allowlist_includes_coverage_guidance(self):
         tmp, workspace = self._workspace()
         self.addCleanup(tmp.cleanup)
         repo = Path(__file__).resolve().parents[2]
@@ -351,8 +351,8 @@ class TestJupyterMcpTools(unittest.TestCase):
 
         self.assertTrue(guide["ok"])
         content = guide["content"]
-        self.assertIn("stroke_preflight.py", content)
         self.assertIn("never mix SSR", content)
+        self.assertIn("num_dtps", content)
         self.assertIn("inputdata()", content)
         self.assertIn("examples/algorithm_examples.py", content)
         self.assertIn("scratch-to-notebook", content)

@@ -47,17 +47,6 @@ def test_parse_sse_response_reads_data_lines() -> None:
     assert parsed == {"ok": True}
 
 
-def test_stroke_preflight_script_exists_in_workspace_template() -> None:
-    from pathlib import Path
-
-    repo = Path(__file__).resolve().parents[1]
-    preflight = repo / "workspace" / "templates" / "scratch" / "stroke_preflight.py"
-    assert preflight.is_file()
-    text = preflight.read_text(encoding="utf-8")
-    assert "select_primary_datasets" in text
-    assert "Does not use inputdata()" in text
-
-
 def test_algorithm_examples_exists_with_cell_markers() -> None:
     from pathlib import Path
 

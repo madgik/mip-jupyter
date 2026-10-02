@@ -22,7 +22,8 @@ mip-jupyter/
     Welcome.ipynb           # Default landing / onboarding
     examples/
       feres_analysis.ipynb
-    scratch/
+    # scratch/ is not in the repo: the entrypoint creates it empty in the
+    # workspace and nothing is shipped into it.
 
   docs/
     user/                   # Canonical user docs → copied to workspace/docs/ in image

@@ -10,7 +10,7 @@ Self-contained for stroke stats — do not chain `02`/`03`/`04` on startup.
 
 1. `jupyter-mcp read-guide --page recipes/stroke-analysis --topic novel`
 2. `jupyter-mcp mip-data-model-summary stroke --version 3.7`
-3. `python scratch/stroke_preflight.py` — **stop** if required vars fail
+3. Confirm SSR coverage: `Pipeline(analysis_set=...).describe()` on SSR over `Admission score`, `24h score`, `3m mRS good outcome`, `Age`, `Sex`, `Clinical syndrome` — **stop** if any SSR row of `summary()["featurewise"]` has `num_dtps` 0 (often empty: `Known AF`, `Oral anticoagulation`, `Prestroke sleep hours`)
 4. Pre-specify one primary hypothesis (outcome, predictors, SSR-only)
 5. `jupyter-mcp scratch-write-file scratch/<name>.py` — the whole analysis, `# %%` cell markers, one arg per line (or `--content-file`)
 6. Fix with `jupyter-mcp scratch-replace-snippet` (or rewrite the file); no per-cell fragments
@@ -23,11 +23,11 @@ Patterns: `examples/feres_analysis.ipynb`, `examples/algorithm_examples.py`.
 ## Guardrails
 
 - One primary outcome (often poor 3m mRS from `"3m mRS good outcome"`)
-- Preflight must pass — catalog presence ≠ SSR data
+- Coverage must be confirmed — catalog presence ≠ SSR data
 - Parenthesize filters: `(F(nihss) >= 10) & (F(nihss) < 20)`
 - `dm.variables["Age"]` + `F(age_var)` — never `F("Age")` / `pipeline.get_variable()`
 - `AnalysisSet` + `Pipeline(analysis_set=...)`; `MissingValuesHandler(strategies={...})`
-- Parse logistic with `parse_logistic_regression_summary()` / `format_logistic_term()`
+- Parse logistic with `parse_logistic_regression_summary()` / `format_logistic_term()` from `mip_jupyter_dev.stroke_federated`
 - Dataset: `datasets=[ssr]` only — never mix SSR with SSR-even/odd
 - Often empty in SSR (exclude primary): `"Known AF"`, `"Oral anticoagulation"`,
   `"Prestroke sleep hours"`
@@ -54,4 +54,4 @@ multiplicity. No `inputdata()` / `to_frame()` / sklearn on rows.
 Heredocs / `write_stdin` / shell file writes; `new_columns=[creator.variable]`;
 ending with CSVs only — always transfer to `scratch/<name>.ipynb`.
 
-**Next:** `scratch-write-file` the ONE analysis script after preflight passes.
+**Next:** `scratch-write-file` the ONE analysis script once coverage is confirmed.

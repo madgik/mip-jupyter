@@ -13,19 +13,6 @@ if [ ! -f "${WORK}/Welcome.ipynb" ]; then
   cp -a "${TEMPLATE}/." "${WORK}/"
 fi
 
-mkdir -p "${WORK}/scratch"
-
-# Sync shipped scratch helpers into existing PVC workspaces without overwriting user files.
-if [ -d "${TEMPLATE}/templates/scratch" ]; then
-  for shipped in "${TEMPLATE}/templates/scratch"/*.py; do
-    [ -f "${shipped}" ] || continue
-    dest="${WORK}/scratch/$(basename "${shipped}")"
-    if [ ! -f "${dest}" ]; then
-      cp "${shipped}" "${dest}"
-    fi
-  done
-fi
-
 # Trust shipped notebooks so execution/output rendering is not blocked in Lab.
 find "${WORK}" -name '*.ipynb' -exec jupyter trust {} + 2>/dev/null || true
 

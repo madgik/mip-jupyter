@@ -31,7 +31,7 @@ docker exec "${CONTAINER}" sh -lc '
   test -x /tmp/mip-codex-home/bin/mip-shell-guard
   test ! -f /tmp/mip-codex-home/bin/codex-acp || test -x /tmp/mip-codex-home/bin/codex-acp
   ! grep -q "\[mcp_servers" /tmp/mip-codex-home/config.toml
-  test -f /home/jovyan/work/scratch/stroke_preflight.py
+  test -d /home/jovyan/work/scratch
   grep -q "# %%" /home/jovyan/work/examples/algorithm_examples.py
 '
 
