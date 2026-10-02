@@ -185,6 +185,16 @@ class TestResults(unittest.TestCase):
         axis.set_title.assert_called_with("Histogram: MMSE")
         figure.tight_layout.assert_called_once()
 
+    def test_plot_histogram_labels_bars_from_bin_edges(self):
+        result = Result(
+            raw={"variable": "Age", "bins": [20, 40, 60, 80], "counts": [3, 7, 5]},
+            result_type="histogram",
+        )
+        axis = MagicMock()
+        with patch("matplotlib.pyplot.subplots", return_value=(MagicMock(), axis)):
+            result.plot()
+        self.assertEqual(axis.bar.call_args.kwargs["tick_label"], ["20-40", "40-60", "60-80"])
+
     def test_plot_logistic_forest(self):
         result = ModelResult(
             raw={

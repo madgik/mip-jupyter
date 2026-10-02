@@ -168,8 +168,12 @@ def _plot_histogram(plt, raw: Any):
     bins, counts = data
     counts = safe_numeric_list(counts)
     variable = _histogram_variable(raw)
+    labels = [str(item) for item in bins]
+    if len(bins) == len(counts) + 1:  # numeric histograms return bin edges, one more than bars
+        edges = safe_numeric_list(bins)
+        labels = [f"{low:g}-{high:g}" for low, high in zip(edges, edges[1:])]
     figure, axis = plt.subplots()
-    axis.bar(range(len(counts)), counts, tick_label=[str(item) for item in bins])
+    axis.bar(range(len(counts)), counts, tick_label=labels)
     axis.set_ylabel("count")
     axis.set_xlabel(variable or "bin")
     axis.set_title(f"Histogram{f': {variable}' if variable else ''}")
