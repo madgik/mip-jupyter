@@ -22,6 +22,9 @@ mip-jupyter/
     Welcome.ipynb           # Default landing / onboarding
     examples/
       feres_analysis.ipynb
+      ist_scenario_1_aspirin.ipynb     # IST teaching scenarios (IST data model)
+      ist_scenario_2_heparin.ipynb
+      ist_scenario_3_prognosis.ipynb
     # scratch/ is not in the repo: the entrypoint creates it empty in the
     # workspace and nothing is shipped into it.
 
