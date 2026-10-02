@@ -16,6 +16,9 @@ jobs:
           python-version: "3.12"
       - name: Install root package and dev deps
         run: uv sync --extra dev
+      # The Codex persona refuses to import unless the codex-acp binary is on PATH.
+      - name: Install codex-acp
+        run: npm install -g @zed-industries/codex-acp
       - name: Codex and MCP tests
         run: |
           uv run pytest \
